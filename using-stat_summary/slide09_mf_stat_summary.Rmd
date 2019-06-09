@@ -1,6 +1,6 @@
 ---
 title: "stat_summary() for on-the-fly summary stats"
-output: gihub_document
+output: github_document
 ---
 
 ### the problem
@@ -16,6 +16,11 @@ But this is all unnecessary: stat_summary() is a ggplot function that lets you c
 I've found the tidyverse help page for stat_summary (https://ggplot2.tidyverse.org/reference/stat_summary.html) to be less than helpful.
 I had to do some digging to understand how to control some parts of the `stat_summary()` function.
 I outline what i learned here.
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', fig.width = 3, fig.height = 3)
+```
 
 
 ```{r data}

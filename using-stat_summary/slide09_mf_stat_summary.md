@@ -64,7 +64,7 @@ p + stat_summary(
   )
 ```
 
-![](slide09_mf_stat_summary_files/figure-gfm/stat_summary-1.png)<!-- -->
+<img src="slide09_mf_stat_summary_files/figure-gfm/stat_summary-1.png" style="display: block; margin: auto;" />
 
 For just error bars, you can do:
 
@@ -75,17 +75,16 @@ p + stat_summary(
   )
 ```
 
-![](slide09_mf_stat_summary_files/figure-gfm/stat_summary2-1.png)<!-- -->
+<img src="slide09_mf_stat_summary_files/figure-gfm/stat_summary2-1.png" style="display: block; margin: auto;" />
 
 Above, the stat\_summary() argument `fun.data = "mean_cl_boot"`, calls
 the workhorse function `Hmisc::smean.cl.boot()`, which actually conducts
 the bootstrap. (Note that confusingly, it’s called not with the function
-name `"smean.cl.boot"`, but with `"mean_cl_boot"`, because hadley fkn
-loves underscores i guess.) Note also, we can pass arguments to
-`smean.cl.boot()` via the `fun.args` argument. The arguments we pass
-must be wrapped within a list. That’s how I changed the number of
-iterations. (See `?Hmisc::smean.cl.boot()` for other arguments you could
-pass.)
+name `"smean.cl.boot"`, but with `"mean_cl_boot"`.) Note also, we can
+pass arguments to `smean.cl.boot()` via the `fun.args` argument. The
+arguments we pass must be wrapped within a list. That’s how I changed
+the number of iterations. (See `?Hmisc::smean.cl.boot()` for other
+arguments you could pass.)
 
 In fact, you could specify any arbitrary function to `stat_summary()`,
 so long as it takes a numeric vector as an input and returns a
@@ -112,7 +111,7 @@ p + stat_summary(
   )
 ```
 
-![](slide09_mf_stat_summary_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
+<img src="slide09_mf_stat_summary_files/figure-gfm/unnamed-chunk-1-1.png" style="display: block; margin: auto;" />
 
 Note that it would probably be misleading to plot summary stats for a
 reduced set of data over a full set of data; for the sake of the
