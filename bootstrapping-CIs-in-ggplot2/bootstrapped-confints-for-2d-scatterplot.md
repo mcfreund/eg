@@ -31,19 +31,18 @@ p
 <img src="bootstrapped-confints-for-2d-scatterplot_files/figure-gfm/x-and-y-1.png" style="display: block; margin: auto;" />
 
 Being aware of the issues that have been raised regarding correlations
-and parametric stats (e.g., Wilcox & Rousselet, 2018;
-10.1002/cpns.41)—and fooling around on my own with some of these
-issues (e.g., see simulation below)—I’ll be wary of trusting the
-p-values from parametric tests. For example, the statistic I’d get from
-`cor.test(x, y)$p.value` is probably off the mark.
+and parametric stats (e.g., Wilcox & Rousselet, 2018; 10.1002/cpns.41),
+I’ll be wary of trusting the p-values from parametric tests. For
+example, the statistic I’d get from `cor.test(x, y)$p.value` is probably
+off the mark.
 
 So I use an appropriate test, one that’s robust to heteroskedasticity:
 percentile bootstrap of a confidence interval (CI) around the
-correlation statistic (see, e.g. Wilcox, Rousselet, & Pernet, 2018;
+correlation statistic (see, e.g., Wilcox, Rousselet, & Pernet, 2018,
 10.1080/00949655.2018.1501051). For convenience, I wrap this test within
-the following function that takes two vectors of the same length, and
-spits out a bootstrapped p-value and 95% confidence interval of the
-linear correlation coefficient.
+the following function, `boot.bivar()`. This function takes two vectors
+of the same length and spits out a bootstrapped p-value and 95%
+confidence interval of the linear correlation coefficient.
 
 ``` r
 boot.bivar <- function(x, y, n.resamples = 1000) {
@@ -79,8 +78,7 @@ So that’s what I’ll use for inference. Great.
 
 But now, I’d like to depict this uncertainty in my scatterplot.
 Specifically, I’d like to overlay this CI as a layer in my plot.
-Thinking within the ggplot universe, I first turned to
-`geom_smooth()`:
+Thinking within the ggplot universe, I first turned to `geom_smooth()`:
 
 ``` r
 p + geom_smooth(method = "lm")
@@ -130,12 +128,11 @@ boot.bivar.predict <- function(
 }
 ```
 
-I then use it like
-this:
+I then use it like this:
 
 ``` r
 xy.ci <- boot.bivar.predict(data.frame(x, y), "x", "y")  ## get prediction interval
-p + geom_ribbon(ymin = xy.ci$lb, ymax = xy.ci$ub, alpha = 0.3)  ## add to plot
+p + geom_ribbon(aes(ymin = xy.ci$lb, ymax = xy.ci$ub), alpha = 0.3)  ## add to plot
 ```
 
 <img src="bootstrapped-confints-for-2d-scatterplot_files/figure-gfm/unnamed-chunk-4-1.png" style="display: block; margin: auto;" />
@@ -210,85 +207,112 @@ p +
 
 <img src="bootstrapped-confints-for-2d-scatterplot_files/figure-gfm/unnamed-chunk-6-1.png" style="display: block; margin: auto;" />
 Notice how the parametric CI underpredicts the variance when x is high,
-and overpredicts when x is
-low.
+and overpredicts when x is low.
 
-## a simulation: correlation coefficient p-values derived from normality assumption are biased under heteroskedasticity
+<!-- ## a simulation: correlation coefficient p-values derived from normality assumption are biased under heteroskedasticity -->
 
-Here, I convince myself that heteroskedasticity can be a problem for
-parametric stats of correlations.
+<!-- Here, I convince myself that heteroskedasticity can be a problem for parametric stats of correlations. -->
 
-First I created three uncorrelated variables: `x`, `het`, and `hom`. As
-you might guess `het` is heteroskedastic with x; `hom` is not. I did
-this many times, and recorded the p-values of `x ~ het` and `x ~ hom`
-derived from both the t-distribution (`cor.test()`) and our bootstrapped
-distribution (`boot.bivar()`).
+<!-- First I created three uncorrelated variables: `x`, `het`, and `hom`. -->
 
-``` r
-n.sims <- 1000
-p <- data.frame(
-  het.param = vector("numeric", length = n.sims),
-  hom.param = vector("numeric", length = n.sims),
-  het.boot  = vector("numeric", length = n.sims),
-  hom.boot  = vector("numeric", length = n.sims)
-)
-for (ii in seq_len(n.sims)) {
-  het <- rnorm(n, sd = x) ## generate variable that is heteroskedastic and uncorrelated with x
-  hom <- rnorm(n, sd = mean(x))  ## generate variable z which is homoskedastic and uncorrelated with x
-  p[ii, c("het.param", "hom.param")] <- c(cor.test(x, het)$p.value, cor.test(x, hom)$p.value)
-  p[ii, c("het.boot", "hom.boot")] <- c(boot.bivar(x, het)["p"], boot.bivar(x, hom)["p"])
-}
-```
+<!-- As you might guess `het` is heteroskedastic with x; `hom` is not. -->
 
-A look at one draw from the simulation:
+<!-- I did this many times, and recorded the p-values of `x ~ het` and `x ~ hom` derived from both the t-distribution (`cor.test()`) and our bootstrapped distribution (`boot.bivar()`). -->
 
-``` r
-par(mfrow = c(1, 2), mar = c(2, 2, 2, 2))
-plot(x, het, main = "x ~ het")
-plot(x, hom, main = "x ~ hom")
-```
+<!-- ```{r simulation} -->
 
-<img src="bootstrapped-confints-for-2d-scatterplot_files/figure-gfm/simulation-one-draw-1.png" style="display: block; margin: auto;" />
+<!-- set.seed(1084) -->
 
-``` r
-cor(x, het)
-```
+<!-- n.sims <- 1000 -->
 
-    ## [1] 0.03819661
+<!-- p <- data.frame( -->
 
-``` r
-cor(x, hom)
-```
+<!--   het.param = vector("numeric", length = n.sims), -->
 
-    ## [1] 0.01270133
+<!--   hom.param = vector("numeric", length = n.sims), -->
 
-Because there is no true correlation between `x` and either `het` or
-`hom`, the false positive rate should be \~ 5%, if alpha is 0.05. We see
-that heteroskedasticity inflates the parametric p-value, but not the
-bootstrapped:
+<!--   het.boot  = vector("numeric", length = n.sims), -->
 
-``` r
-colMeans(apply(p, 2, function(x) x < 0.05)) * 100  ## false positive rate for each statistic
-```
+<!--   hom.boot  = vector("numeric", length = n.sims) -->
 
-    ## het.param hom.param  het.boot  hom.boot 
-    ##       6.8       5.0       5.3       5.5
+<!-- ) -->
 
-``` r
-par(mfrow = c(2, 2), mar = c(2, 2, 2, 2))
-hist(p$het.param, main = "heteroskedastic, parametric")
-hist(p$hom.param, main = "homoskedastic, parametric")
-hist(p$het.boot, main = "heteroskedastic, bootstrapped")
-hist(p$hom.boot, main = "homoskedastic, bootstrapped")
-```
+<!-- for (ii in seq_len(n.sims)) { -->
 
-<img src="bootstrapped-confints-for-2d-scatterplot_files/figure-gfm/simulation-results-1.png" style="display: block; margin: auto;" />
+<!--   het <- rnorm(n, sd = x) ## generate variable that is heteroskedastic and uncorrelated with x -->
 
-Another thing becomes apparent, as well, which is that the bootstrapped
-p-value might generally be a little optimistic. Even for the `x ~ hom`
-correlation, the false-positive rates are **slightly** higher in
-bootstrap versus parametric. I’m not sure whether this is a general
-property of bootstrap, or due to the specifics of my simulation here.
-But I’ll keep it in mind. The important thing, though, is that it’s
-clear that bootstrapping a CI is an effective way of side-stepping
-heteroskedasticity issues.
+<!--   hom <- rnorm(n, sd = mean(x))  ## generate variable z which is homoskedastic and uncorrelated with x -->
+
+<!--   p[ii, c("het.param", "hom.param")] <- c(cor.test(x, het)$p.value, cor.test(x, hom)$p.value) -->
+
+<!--   p[ii, c("het.boot", "hom.boot")] <- c(boot.bivar(x, het)["p"], boot.bivar(x, hom)["p"]) -->
+
+<!-- } -->
+
+<!-- ``` -->
+
+<!-- A look at one draw from the simulation: -->
+
+<!-- ```{r simulation-one-draw, fig.width = 6} -->
+
+<!-- par(mfrow = c(1, 2), mar = c(2, 2, 2, 2)) -->
+
+<!-- plot(x, het, main = "x ~ het") -->
+
+<!-- plot(x, hom, main = "x ~ hom") -->
+
+<!-- cor(x, het) -->
+
+<!-- cor(x, hom) -->
+
+<!-- ``` -->
+
+<!-- Because there is no true correlation between `x` and either `het` or `hom`, the false positive rate should be ~ 5%, if alpha is 0.05. -->
+
+<!-- We see that heteroskedasticity inflates the parametric p-value, but not the bootstrapped: -->
+
+<!-- ```{r simulation-results, fig.width = 6, fig.height = 4} -->
+
+<!-- colMeans(apply(p, 2, function(x) x < 0.05)) * 100  ## false positive rate for each statistic -->
+
+<!-- par(mfrow = c(2, 2), mar = c(2, 2, 2, 2)) -->
+
+<!-- hist(p$het.param, main = "heteroskedastic, parametric") -->
+
+<!-- hist(p$hom.param, main = "homoskedastic, parametric") -->
+
+<!-- hist(p$het.boot, main = "heteroskedastic, bootstrapped") -->
+
+<!-- hist(p$hom.boot, main = "homoskedastic, bootstrapped") -->
+
+<!-- plot(density(p$het.param, from = 0, to = 1), lwd = 2, "p-value distribution") -->
+
+<!-- lines(density(p$hom.param, from = 0, to = 1), lwd = 2, lty = 2) -->
+
+<!-- lines(density(p$het.boot, from = 0, to = 1), lwd = 2, col = "firebrick") -->
+
+<!-- lines(density(p$hom.boot, from = 0, to = 1), lwd = 2, lty = 2, col = "firebrick") -->
+
+<!-- abline(h = 0, v = 0.05, col = "grey50") -->
+
+<!-- alph <- 0.05 -->
+
+<!-- binom.test(sum(p$het.param < alph), n = n.sims, alternative = "greater", p = alph) -->
+
+<!-- binom.test(sum(p$hom.param < alph), n = n.sims, alternative = "greater", p = alph) -->
+
+<!-- binom.test(sum(p$het.boot < alph), n = n.sims, alternative = "greater", p = alph) -->
+
+<!-- binom.test(sum(p$hom.boot < alph), n = n.sims, alternative = "greater", p = alph) -->
+
+<!-- ``` -->
+
+<!-- Another thing becomes apparent, as well, which is that the bootstrapped p-value might generally be a little optimistic. -->
+
+<!-- Even for the `x ~ hom` correlation, the false-positive rates are **slightly** higher in bootstrap versus parametric. -->
+
+<!-- I'm not sure whether this is a general property of bootstrap, or due to the specifics of my simulation here. -->
+
+<!-- But I'll keep it in mind. -->
+
+<!-- The important thing, though, is that it's clear that bootstrapping a CI is an effective way of side-stepping heteroskedasticity issues. -->

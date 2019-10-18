@@ -1,0 +1,1091 @@
+---
+title: "A rough intro to base R and linear regression"
+author: "mike freund"
+date: "2019-09-20"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, error = TRUE, fig.align = "center")
+```
+
+<br>
+
+# about
+
+<br>
+
+Statisticians have played influential roles in the development of R.
+If there's a stats techique that's recently been developed, it was probably developed in R.
+These developments or contributions typically take the form of packages (i.e., libraries):
+software extensions that are stored on [CRAN (comprehensive R archive network)](https://cran.r-project.org/).
+Because of this, R is a useful statistical programming language to know, as most methods can be done
+ (and many methods can be done well) in R and via packages.
+
+Base R is the default library that comes with installation.
+For starting out, base is probably the most useful thing to focus on getting to know first.
+Knowing how to tackle problems in base has several benefits.
+It is
+
+1. the most flexible solution, as it's guaranteed to be on any machine that has R, and can do a wide range of things.
+   Many packages are just fancy wrappers for base R operations.
+2. is generally efficient
+3. is generally reliable. has more and better developers thus fewer bugs. this is not to say that there aren't
+   well-developed packages --- there are *many* --- but i'd bet that there are fewer bugs in base R than the
+   *average* package on CRAN.
+
+But there are several packages that make working with data in R more convenient.
+Using those can come later.
+
+### keyboard shortcuts (RStudio)
+
+* see all shortcuts: **alt+shift+k**
+* see also: Help $\rightarrow$ Cheatsheats $\rightarrow$ RStudie IDE cheatsheat
+* the most useful one:
+    + **ctrl+enter**: when the cursor is within a script in RStudio, this sends the current line to the console and advances to the next line.
+    + (Or, if an expression is highlighted, it sends only the selected code.)
+    + this is useful for stepping line-by-line through a script (e.g., when manually debugging).
+    + I would recommend stepping through this script with ctrl+enter and taking a look at the console after each line.
+
+* other useful ones:
+    + **alt+enter** sends the current line to the console without advancing.
+    + **ctrl+2** jumps to console
+    + **ctrl+1** jumps to script
+    + **ctrl+shift+s** sources entire script
+
+### reference and additional reading
+
+* [operators](https://cran.r-project.org/doc/manuals/r-release/R-lang.html#Operators)
+* [data structures](https://swcarpentry.github.io/r-novice-inflammation/13-supp-data-structures/)
+* [R vectors (a more advanced reading)](https://adv-r.hadley.nz/vectors-chap.html)
+
+<br>
+
+***
+
+<br>
+
+# creating and working with vectors
+
+<br>
+
+The vector is an important data type in R.
+(see above link for more advanced reading on R vectors)
+There are two general types: 'atomic', and list (or 'general') vectors
+
+<br>
+
+### 1. 'atomic' vectors
+
+These are building block vectors, the basic elements of all vector objects.
+Atomic vectors have several 'types': logical, double, integer, or string (character)
+Using the vector() function will create "empty" vectors:
+```{r}
+vector(mode = "logical", length = 10)
+vector(mode = "double", length = 10)
+vector(mode = "integer", length = 10)
+vector(mode = "character", length = 10)
+```
+
+#### Assignment.
+Assignment (saving objects) is done with `<-`
+```{r}
+empty <- vector(mode = "character", length = 10)
+empty
+```
+
+When assigning, you want to make sure the proposed object name is not already assigned to a function.
+Having two objects with the same name can cause confusion.
+To do this, you should evaluate the canditate name.
+For example, say you want to assign the name "c" to a number (c <- 40). enter "c" into the console:
+```{r}
+c
+```
+You see that c is already taken.
+
+So you try a  different name:
+```{r, error = TRUE}
+d
+```
+Great. this one is free to be used.
+```{r}
+d <- 40
+```
+
+#### Key properties.
+Essential properties of vectors can be accessed or modified via these functions:
+```{r}
+typeof(empty)  ## the 'type' of atomic vector
+class(empty)  ## see note below
+str(empty)  ## 'structure': gives class, dimensions, and a preview of the elements.
+length(empty)  ## number of elements
+names(empty)  ## we haven't set the names yet, so it returns NULL. See next section for setting names
+```
+NB: "class' is a slightly different property than type; the distinction is not essential for getting the basics.
+(But if you're interested btw difference btw 'type' and 'class', see, e.g., here: https://stats.stackexchange.com/questions/3212/mode-class-and-type-of-r-objects)
+
+#### Concatenation.
+
+An important operation is contcatenation: `c()`
+
+```{r}
+abcd <- c("a", "b", "c", "d")
+```
+Note that abcd is now a single vector:
+```{r}
+abcd
+typeof(abcd)
+length(abcd)
+```
+Also, note that, in R, single elements are vectors, too; just of length 1:
+```{r}
+"a"
+typeof("a")
+length("a")
+```
+
+`c()` can combine multiple vectors of different lengths:
+```{r}
+c(abcd, empty, "a", "1", "2")
+```
+
+This can also be done for doubles:
+```{r}
+onetwothreefour <- c(1, 2, 3, 4)
+onetwothreefour
+typeof(onetwothreefour)
+```
+For creating sequential integers, hoewever, a more convenient way is to use the colon operator:
+```{r}
+1:4
+all.equal(1:4, onetwothreefour)
+```
+
+
+#### Names.
+The elements of a vector can have names: a character value associated with each.
+```{r}
+names(abcd)  ## names not yet defined
+names(abcd) <- c("letter1", "letter2", "letter3", "letter4")  ## setting names on abcd
+names(abcd)
+abcd
+```
+Setting names can also be done when creating a vector:
+```{r}
+c(name1 = "asdf", name2 = "fdsa")
+```
+
+#### Vectorization.
+Many operations in R are 'vectorized', i.e., use element-wise operation by default:
+```{r}
+onetwothreefour + onetwothreefour  ## element-wise addition (vector addition)
+onetwothreefour / onetwothreefour
+abcd == "a"  ## gives a boolean vector
+abcd != "a"  ## not equal to
+abcd %in% c("a", "b")  ## does an element (in abcd) belong to a vector (c("a", "b"))?
+onetwothreefour > 2
+```
+Vectorization is convenient shorthand: it can save a couple lines of code, for example, by avoiding writing a loop.
+Vectorized operations are also generally faster than writing 'iterative' operations in R (e.g., in a for loop).
+This is because the operations specified by the vectorized code, while ultimately 'iterative', are not performed by R; they are performed by the underyling C.
+But, there are exceptions to this rule.
+
+#### Extraction.
+Acessing single or multiple elements of a vector is performed via square brackets.
+Elements can be extracted by position (with integer vector), name (with character), or by boolean statement (with logical).
+```{r}
+abcd[1]  ## index via position
+abcd["letter1"]  ## via name
+abcd[abcd == "a"]  ## via boolean
+```
+
+#### Matrices and arrays.
+Matrices and arrays are also atomic vectors.
+But these classes of vectors have a dim() attribute.
+That is, they have *dimensions*.
+Matrices are two dimensional vectors (row and columns).
+Importantly, all vectors within a matrix (or array) are constrained to be of the same type (e.g., "integer").
+```{r}
+m <- matrix(1:4, nrow = 2, ncol = 2)
+m
+dim(m)
+class(m)  ## class will tell you if it's a matrix
+typeof(m)  ## typeof will tell you the type of vector that it is
+```
+Extraction is again performed with brackets, but now two dimensions must be specified (with comma):
+```{r}
+m[1, 2]
+m[, 2]  ## omit an index to extract entire row (or column)
+```
+Arrays are multidimensional matrices.
+```{r}
+a <- array(1:8, dim = c(2, 2, 2))  ## a 2 by 2 by 2 array (two 2x2 matrices 'stacked' on top of each other)
+a
+class(a)
+typeof(a)
+class(a[, , 1])  ## arrays are multidimensional matrices
+a[1, 2, 2]
+```
+Setting names with matrices and arrays is slightly different than setting names with 1D atomics.
+For matrices, because they have 2 dimensions, they have two types of names: `rownames()` and `colnames()`
+```{r}
+rownames(m) <- c("row1", "row2")
+colnames(m) <- c("col1", "col2")
+m
+m["row1", "col2"]  ## just as before, elements can be indexed by name
+```
+
+Setting names in arrays is slightly more complicated so we can hold off on that for now.
+
+
+Matrices and arrays are useful for certain things. 
+The primary purpose of the matrix object is for performing [linear algebra](https://en.wikipedia.org/wiki/Linear_algebra).
+Sometimes volumetric fMRI data is loaded and stored as arrays in R (as it inherently has 3 dimensions).
+(However, aside from this use, I have rarely seen the array object used in R.)
+Thus, arrays and matrices can be useful vector types to know; but for now we don't need to focus on working with them.
+
+<br>
+
+### 2. 'list' vectors (aka 'general' vectors)
+
+In base R, 'list' vectors include data.frames and lists.
+These are more flexible objects than matrices.
+
+#### data.frames
+
+The data.frame is probably the most used R data structure.
+You can think of data.frames roughly as sophisticaed spreadsheets.
+They have two dimensions (rows, columns).
+Unlike matrices, the columns within a data.frame can be composed of vectors of different types (e.g., integer, character).
+
+Here, I create a dataframe with 3 columns and 15 rows.
+```{r}
+df <- data.frame(col1 = 1:12, col2 = rep(abcd, 3), col3 = 1:12 * 0.15 + 2, stringsAsFactors = FALSE)
+df
+## NB: strings.as.factors option ensures that all character vectors are typecast as class "character", not 
+## class "factor", which is a special class of integers.
+dim(df)  ## number of rows and columns
+length(dim(df))  ## number of dimensions
+str(df)  ## columns can be vectors of different type
+```
+
+As with all other vectors, data.frame elements can be extracted via brackets:
+```{r}
+df[5, 2]
+df[1:10, ] ## to access all columns
+df[1:10, c("col1", "col3")]
+```
+
+Elements (columns) of a data.frame (or list) can be accessed without adding a comma:
+```{r}
+df["col2"]
+```
+Note that extracting `"col2"` in this manner preserves the data.frame object:
+```{r}
+class(df["col2"])
+```
+
+Thus, the resulting `df["col2"]` object should be indexed just like a data.frame, which has 2 dimensions:
+```{r}
+df["col2"][1:10, ]
+df["col2"][1:10]  ## wrong!
+```
+
+In contrast, the *double-bracket*, does not preserve the data.frame object, and extracts the underlying atomic vector:
+```{r}
+df[["col2"]]
+class(df[["col2"]])
+
+```
+And thus the resulting `df[["col2"]]` should be indexed just like an atomic vector:
+```{r}
+df[["col2"]][1:10]
+df[["col2"]][1:10, ]  ## wrong!
+```
+
+A shorthand for the `[[` extraction for data.frames (or lists) is `$`.
+Note that this notation requires names, and that we can omit the quotes around the element's name:
+```{r}
+df$col2
+```
+Again, note that the resulting object is now an atomic vector, and thus should be indexed as an atomic vector.
+```{r}
+typeof(df$col2)
+df$col2[1:10]
+```
+
+The $ operator is useful for interactive use, however, the '[[' is preferred for code that will be re-used, as the
+double-bracket is more flexible in its uses
+(e.g., see [here](https://stackoverflow.com/questions/42560090/what-is-the-meaning-of-the-dollar-sign-in-r-function).
+
+Within an existing data.frame, new columns can be created with assignment:
+```{r}
+df
+df["newcol"] <- 12:1
+df
+```
+
+
+#### lists
+
+Lists are another important type of 'general' vector.
+They can be thought of as a more flexible dataframe: a data.frame in which the length of each element (i.e., the number of 'rows' in each 'column') is *not* constrained to be equal.
+```{r}
+l <- list(1:4, TRUE, "this is a list", rep(abcd, 3), m)  ## creating a list
+l
+```
+
+Lists can also contain data.frames.
+```{r}
+l[["df"]] <- df
+l
+```
+
+Lists are extremely useful for iterative operations (e.g., storing the results of an regression that was repeated
+many times).
+But lists aren't necessary for getting the basics of R, so I'll hold off on discussing them.
+
+
+<br>
+
+### Vectors summary
+
+OK. so we've seen a variety of different objects: 
+
+* atomic vectors of one dimension: **characters**, **integers**, **doubles**, **logicals**
+* atomic vectors of two dimensions: **matrices** (composed of 1D atomics)
+* atomic vectors of > two dimensions: **arrays** (composed of matrices)
+* and two types of list vectors: **data.frames**, and **lists**
+
+Note that these are (somewhat) hierarchically  structured.
+As a general rule, use a data structure that is as simple as possible for the purpose.
+
+<br>
+
+***
+
+<br>
+
+# Functions
+
+Functions operate on objects.
+Functions are also objects.
+We've already used several functions: for example, `c()`, `matrix()`, `typeof()`
+Typically, a function is specified by a name (`c`).
+In using a typical function, the function name is immediately followed by parentheses, which contain the arguments.
+To see the documentation for a function, put a questionmark before the function name (and do not use parentheses).
+```{r}
+?c
+```
+
+Users can also define functions.
+This is an important feature of R that allows for code to be modular and parsimonious.
+More on this later.
+
+<br>
+
+***
+
+<br>
+
+# Intro to regression and plotting: 3 example analyses
+
+Having seen some basic R tools, let's now use them in statistical analysis.
+We have some behavioral data (response times, errors) from the four dual mechanism's tasks (ACPT, cued task-switching, Sternberg working memory, Stroop).
+Below, I've sketched three types of analyses that we can do on these data.
+The analyses involve linear regression.
+In sketching these analyses, I've also attempted to highlight some core concepts behind linear regression, and to connect regression to the most basic type of hypothesis testing covered in typical "Intro to Psych Stats" courses: the t-test.
+
+I've written code for these three analyses.
+The code I wrote uses only the stroop data.
+You can duplicate and extend these analyses with data from any (or all) of the other three tasks.
+
+<br>
+
+
+### Analysis 1. Do subjects generally show a Stroop effect?
+
+The idea here is to estimate a Stroop effect per person, then test whether these effects are significantly greater than zero.
+We can perform this test via a t-test.
+We can also perform this test via regression.
+In fact, when the regression model is structured appropriately, both methods can be equivalent.
+I'll try to illustrate that here.
+Thinking about things in terms of regression (linear models) gives a common framework to a lot of statistical techniques.
+
+
+Before we jump in, we need to get the data into R and take a look at how it is organized.
+
+#### Reading data.
+
+The base R function `read.table()` reads text files that are structured as tables (i.e., with rows and cols) and creates a data.frame from them.
+Make sure that you set the first argument to this function (`file = `) to the file name.
+If the file is in the working directory (accessed via `getwd()` and set via `setwd()`), just the file name is necessary (not the full path).
+```{r}
+stroop <- read.table(
+  file = "C:/Users/mcf/Box/global/wustl/proj/cross-task-rsa/sheets/dmcc2_behavior-and-events-stroop.csv",  ## CHANGE THIS to wherever the file is on your computer
+  stringsAsFactors = FALSE,  ## typecasts columns with characters as characters, not factors
+  sep = ",",  ## in .csv files, the separator is commas (comma separated values),
+  header = TRUE  ## is the first row of names?
+)
+class(stroop)
+```
+If the file is in .csv format, a wrapper for `read.table()` is `read.csv()`.
+```{r}
+stroop <- read.csv(
+  "C:/Users/mcf/Box/global/wustl/proj/cross-task-rsa/sheets/dmcc2_behavior-and-events-stroop.csv",  ## CHANGE
+  stringsAsFactors = FALSE
+)
+```
+Note that now, in using `read.csv()`, the default aruments are now `sep = ","`, and `header = TRUE`.
+
+`read.table()` is a good example of a base R function for which there are much superior alternatives in.
+For larger datasets, `read.table()` can be slow.
+A good alternative is the `data.table` package `fread()` (fast read).
+But for now `read.table()` is just fine.
+
+#### Examining data.
+
+Here I'm just glancing at how this data.frame is organized.
+```{r}
+head(stroop)  ## first few rows
+str(stroop)
+```
+
+There are a ton of columns that will be unecessary for our purposes.
+Let's get rid of them.
+
+Here I extract the columns that I'd like to keep and overwrite the `stroop` data.frame with the extracted columns.
+```{r}
+keep.these <- c("session", "run", "subj", "word", "color", "trial.type", "trial.num", "rt", "acc")
+stroop <- stroop[, keep.these]
+head(stroop)
+tail(stroop)
+```
+
+You can see how the data are organized.
+Each row is a single trial for a single participant: containing an RT, accuracy value (binary), and the trial information.
+This format is called "long" form.
+(Long form data is in contrast to "wide form", in which all data from a single participant, e.g., would be contained within a single row.)
+Long form data is necessary for regression in R.
+
+A quick summary of the column names:
+
+* **session**: the experimental session ("baseline", "proactive", "reactive")
+* **run**: the experimental run (1, 2)
+* **subj**: participant
+* **word**: the distracting word that was presented (what the subject was trying not to say)
+* **color**: the color that was presented (what the subject was trying to say)
+* **trial.type**: congruent or incongruent
+* **trial.num**: the position of the trial within the run
+* **rt**: response time (onset of verbal response; estimated via in-scanner recordings)
+* **acc**: correct? (binary; determined by listeners)
+
+To examine the unique values of each column, you can use `unique()`:
+```{r}
+unique(stroop$session)
+unique(stroop$subj)
+```
+
+We have 3 sessions and 81 subjects.
+To compute the number of subjects, you can just wrap the `unique()` function call in `length()`:
+```{r}
+length(unique(stroop$subj))
+```
+
+The Baseline session is the first session that all subjects completed.
+Also, it's the session where the Stroop effect is predicted to be maxmial, as incongruent stimuli are relatively infrequent.
+So let's test this question within the Baseline data.
+I create a data.frame of only the baseline session stroop data:
+```{r}
+stroop.b <- stroop[stroop$session == "bas", ]
+```
+
+It's an extremely good idea to look at the data before you conduct any analyses.
+Ideally the data should be in as raw a form possible that is still interpretable.
+To get a sense for the distribution of RTs in our sample, I create a simple plot:
+```{r}
+plot(stroop.b$rt, xlab = "row number", ylab = "response time", main = "all Stroop RTs, baseline session")
+```
+
+The y axis is RT; the x-axis is index (row number) within `stroop.b`.
+Because I didn't specifiy an x-axis variable in `plot()`, it automatically uses the row number.
+But all I really care about is the RT value, so this doesn't matter.
+The plot makes clear that the distribution is positively skewed (as most all RT distributions are).
+And that a number of RTs have a value of 0.
+
+Another descriptive plot is the boxplot:
+```{r}
+boxplot(stroop.b$rt, ylab = "response time", main = "all Stroop RTs, baseline session")
+```
+
+The boxplot also highlights the positive skew.
+
+Keep in mind that these trials include trials in which the subject was incorrect.
+So let's remove those.
+```{r}
+stroop.b.acc <- stroop.b[which(stroop.b$acc == 1), ]
+```
+Note that, in contrast to above (extracting the baseline session), I've wrapped the boolean statment in `which()`.
+This is because I know that the `stroop.b$acc` column contains `NA`s, wheras I know the `stroop$session` column does not.
+Using `which()` around the boolean statement avoids a weird feature of R, that involves extracting elements of a vector that have value `NA`.
+I'll spare you the explanation of this weird feature.
+But the basic idea of `which()` is that the function takes a boolean vector as input, and outputs an integer vector indicating *which elements are* `TRUE` (i.e., the positions of the elements).
+
+Anyway, let's take another look at the data after this subsetting:
+```{r}
+plot(
+  stroop.b.acc$rt, 
+  xlab = "row number", 
+  ylab = "response time", 
+  main = "correct-trial Stroop RTs, baseline session"
+  )
+```
+That removed many of the RT == 0 trials.
+A proper analysis should perform more extensive evaluations of the data (e.g., determining outliers, characterizing the distributions, etc...) before conducting the analysis.
+But let's ignore that for now.
+
+
+Now, here's an important consideration.
+The data are currently at the level of individual trials.
+To test whether the stroop effect is generally present across subjects, we need to aggregate the data somehow.
+One way to do this is to get the mean RT for each subject in each condition, and subtract them:
+$\text{Stroop} = RT_{\text{incon.}} - RT_{\text{con.}}$.
+Then, we can test whether the resulting difference (the Stroop effect) is greater than zero across subjects.
+
+To say this in more programatic terms: we need to aggregate the `rt` vector *by groups*, which are defined via the values of other vectors (`trial.type`, and `subj`), then subtract the resulting aggregate `rt` values by group.
+
+There are many ways of aggregating data by group in R.
+One relatively straightforward way of doing this in `base`, given the tools I've introduced thus far, is to use `aggregate()`.
+The first argument (`x`) takes the to-be-aggregated vector; the `by` argument takes the "grouping variables"; the `FUN` argument takes the function to be applied to the `x` of each group.
+```{r}
+stroop.b.acc.subj <- aggregate(x = stroop.b.acc["rt"], by = stroop.b.acc[c("subj", "trial.type")], FUN = mean)
+head(stroop.b.acc.subj)
+```
+
+Great.
+But notice that there are `NA`s in the rt column.
+This is because whenever the `mean()` function encounters an `NA`, it will output `NA`.
+```{r}
+mean(c(1, 1, 1, NA))
+```
+This is useful behavior, as R will let us know if there are `NA`s in a measure that we're performing operations on.
+
+But, for the present purpose, we don't care whether someone has a couple `NA` values in their `rt` column.
+(`NA`s indicate the trials in which no RT could be estimated by our RT estimation script.)
+So, we tell `mean()` to just drop `NA` values with the `na.rm` argument (NA remove):
+```{r}
+mean(c(1, 1, 1, NA), na.rm = TRUE)
+```
+
+If we put this `na.rm` argument at the end of `aggregate()`, the `aggregate()` function will pass the argument to `mean()`:
+```{r}
+stroop.b.acc.subj <- aggregate(stroop.b.acc["rt"], stroop.b.acc[c("subj", "trial.type")], mean, na.rm = TRUE)
+head(stroop.b.acc.subj)
+```
+
+OK. So now we have the mean RT per condition (congruent, incongruent) per subject.
+We want to test whether the RTs are longer (slower) in incongruent versus congruent for each subject.
+There are a number of ways we can perform this test.
+
+#### (A) Performing the one-sample t-test.
+
+One way of doing this is to perform the $RT_{\text{incon.}} - RT_{\text{con.}}$ subtraction ourselves, then test whether the
+resulting values (Stroop effects) are greater than zero, through a **one sample t-test**.
+
+<br>
+
+A quick aside about the t-test.
+The t-statistic (and many other test statistics and effect size measures) can be thought of as a simple ratio: $t = \frac{\text{signal}}{\text{noise}}$.
+The $\text{signal}$ in a t-test is a *difference between means*.
+Here, the mean we are interested in is the mean Stroop effect across subjects: whether this is different than zero.
+Let's call this $\hat\beta_{\text{Stroop}} = \text{mean Stroop effect}$.
+The "hat" indicates it is a number that was *estimated* from the data; I use "beta" here to use the same notation that is used in linear regression (as will be seen shortly).
+The $\text{noise}$ is also estimted from the data; however, it is estimated not with the mean, but the *variance around the mean*.
+Variance is usually indicated by a $\sigma^2$; the square of the standard deviation ($\text{sd}(\hat\beta_{\text{Stroop}}) = \sigma$).
+However, it is not simply the standard deviation of the sample that the t-test uses; it is the "standard error of the mean".
+Standard error is given by $\text{se} = \sigma/\sqrt{n}$.
+You can see that the standard error takes into account the sample size.
+It is an estimate of how precisely we expect the mean statistic ($\hat\beta_{\text{Stroop}}$) to have been estimated, given the variability in the sample ($\sigma$) and the sample size ($n$).
+Thus, the t-statistic is given by $t = \frac{\hat\beta_{\text{Stroop}}}{\text{se}(\hat\beta_{\text{Stroop}})}$.
+To highlight the fact that we're interested in whether $\hat\beta_0$ differs from zero, we can write $t = \frac{\hat\beta_{\text{Stroop}} - 0}{\text{se}(\hat\beta_{\text{Stroop}}) - 0)}$.
+
+<br>
+
+Now to perform this one-sample t-test.
+First, we need to subtract the congruent elements from the incongruent elements by subject.
+We can also do this subtraction in a number of different ways.
+One way of doing this is to change the format of `stroop.contrast.rt` to wide, then perform the subtraction.
+This can be done by using the function `reshape()`.
+You can think of the action carried out by `reshape()` as splitting the `rt` vector in half, into incongruent and congruent RTs, then bringing the lower half (e.g., incongruent RTs) up to be in line with the congruent RTs, in a way that respects the values of the `subj` vector.
+
+The `idvar` argument specifies the column that will identify each row in the new (wide) data.frame.
+The `timevar` argument specifies the column to *split by* ("timevar" because the trial.type varies within subject (idvar) over time).
+`direction` indicates long $\rightarrow$ wide.
+```{r}
+stroop.b.acc.subj.wide <- reshape(stroop.b.acc.subj, idvar = "subj", timevar = "trial.type", direction = "wide")
+head(stroop.b.acc.subj.wide)
+```
+Do you see the difference in how `stroop.b.acc.subj.wide` and `stroop.b.acc.subj` are organized?
+
+Now we can perform a vector subtraction, and create a new column in the data.frame:
+```{r}
+stroop.b.acc.subj.wide$rt.ic <- stroop.b.acc.subj.wide$rt.i - stroop.b.acc.subj.wide$rt.c
+head(stroop.b.acc.subj.wide)
+names(stroop.b.acc.subj.wide) <- c("subj", "rt.con", "rt.incon", "rt.stroop")  ## create better names
+```
+
+And the t-test can be performed simply within R:
+```{r}
+ttest.stroop <- t.test(stroop.b.acc.subj.wide$rt.stroop)
+```
+
+Note that when we print the `ttest.stroop` object, it spits out some summary text:
+```{r}
+ttest.stroop
+```
+Contained within that text is the t-statistic, and the corresponding p value.
+The Stroop effect is positive (given the positive t-value), and highly significant (given the extremely small p value).
+
+More usefully, we can access these particular elements by extracting them from the `ttest.stroop` object.
+```{r}
+ttest.stroop[["statistic"]]  ## the t statistic
+ttest.stroop[["p.value"]]  ## the p value
+```
+
+#### (B) Performing the one-sample t-test via regression.
+
+The first model I'll fit is called the 'intercept only' model.
+I'll describe this abstractly, then bring it back to our example of the stroop effect.
+
+##### Brief notes on regression: the 'intercept only' model
+
+A linear regression model is a linear combination (weighted sum) of certain variables.
+Let's first consider the simplest regression model possible: a model with *no* 'predictors' (no independent variables).
+
+\[\textbf{y} = \mathbf{x}_0\beta_0 + \boldsymbol{\epsilon}\]
+
+This model is often called the "intercept only", or "empty" model. (For reasons which will become clear).
+
+Before I continue, a few things to note in this formula.
+Generally, anything that is in bold font is a vector; that is, contains several rows (observations).
+So notice that all terms, except for the $\beta_0$, are vectors (because they are bold).
+
+* $\mathbf{y}$: the dependent variable; a single column vector
+  + aka the "response" variable
+* $\mathbf{x}_0$: $\mathbf{x}$ is generally used to refer to the independent variables. $\mathbf{x}_0$ refers specifically to what is called the
+*intercept*. The intercept column ($\mathbf{x}_0$) is always just a vector of ones; thus it is sometimes known as the "constant". Because it is only a vector of ones, it is often omitted, like so: $\textbf{y} = \beta_0 + \boldsymbol{\epsilon}$
+  + $\mathbf{x}$ variables are also known as the "design matrix" (because we design it), "regressors", "predictors", "explanatory variables", or simply, "the model"
+* $\beta_0$: the estimated coefficient for the corresponding independent variable. The $0$ indicates that the coefficient is what is called the "intercept".
+  + aka "betas", "parameters", "coefficients", "slopes" (if $\beta_{>0}$; "intercept coefficient" (if $\beta_0$)
+* $\boldsymbol{\epsilon}$: the "error" or "residual" vector
+
+One way of thinking about linear models is within a 2D scatterplot (see below).
+The x axis is the independent variable, the y axis is the dependent.
+The points are the observations (one for each row in the vectors).
+The goal of regression is to estimate a line that adequately describes the relationship between x and y.
+Recall from grade school algebra (y = mx + b) that a line is entirely described by two variables: the **slope** and the **intercept**.
+The slope and intercepts are given by the $\beta$s ($\beta_0$ for intercept, $\beta_{>0}$ for slopes).
+To understand how these $\beta$s are estimated, imagine that some line (any line) is drawn in this 2D scatterplot space.
+The $\boldsymbol{\epsilon}$ gives the vertical distance from each point (observation) to this hypothetical line.
+Think of these distances as the "error" between the line (the 'prediction') and each datapoint.
+These distances are squared (to make them all positive), then summed, to form a single measure of "badness of fit": the "sum of squared error" ($\sum\boldsymbol{\epsilon}^2$).
+The basic form of regression ("ordinary least-squares") finds *the* $\beta$s (slopes and intercept) that minimize the sum of squared error --- i.e., the line that is closest to all datapoints.
+
+##### Applying the 'intercept only' model to test the Stroop effect.
+
+One way to replicate the above t-test via regression is to fit the no-intercept model.
+We will use the R function `lm()`, which gives a convenient interface for performing ordinary least-squares regression.
+Our $\mathbf{y}$ (DV) will be the vector that contains each individual's Stroop effect estimate in response times: `stroop.b.acc.subj.wide$rt.stroop`.
+Our $\mathbf{x}_0$ will simply be a column of 1's.
+What `lm()` will do is find the $\beta_0$ that minimizes $\sum\boldsymbol{\epsilon}^2$.
+Thus, we input $\mathbf{y}$ and $\mathbf{x}_0$, and R spits back the $\beta_0$ and $\sum\boldsymbol{\epsilon}^2$.
+
+Here I fit and store the "empty" ("intercept only") model:
+```{r}
+fit.empty <- lm(rt.stroop ~ 1, data = stroop.b.acc.subj.wide)
+```
+The first argument of `lm()` is the model formula.
+Notice it is in a similar form as the equation I specified above: the general form is: `name.of.y.variable ~ name.of.x.variables`, and the only x variable I added was the intercept (the `1`).
+Also notice that, conveniently, it is not necessary to wrap the formula elements in quotes (the `formula` object is a special kind of R object, which doesn't require string input).
+The `data` argument is where the data.frame that holds the variables referenced in the formula are stored.
+
+To examine the results of the model, `summary()` is used.
+```{r}
+summary(fit.empty)
+```
+The coefficients are indicated: there is only 1 row, labeled `"(Intercept)"` ($\beta_0$).
+Notice that the estimated $\beta_0$ is equal to the mean Stroop effect.
+```{r}
+coef(summary(fit.empty))[, "Estimate"]
+mean(stroop.b.acc.subj.wide$rt.stroop)
+```
+Notice also that the t and p values are printed.
+These values correspond to the t-value contrast: $t = \frac{\beta_0 - 0}{\text{se}(\beta_0)}$, or, "is the intercept different than zero?".
+This t-value is identical to the one calculated above:
+```{r}
+coef(summary(fit.empty))
+ttest.stroop[["statistic"]]
+```
+
+**To understand why we wanted to set the value of $\mathbf{x}_0$ to 1, let's consider this model graphically.**
+Displayed below is the "no-intercept" model specified in the above equation.
+
+```{r}
+plot(
+  x = rep(1, length(stroop.b.acc.subj.wide$rt.stroop)), 
+  y = stroop.b.acc.subj.wide$rt.stroop,
+  xlim = c(0, 1.25),
+  xlab = expression(bold('x')),
+  ylab = expression(bold('y'))
+  )
+abline(0, mean(stroop.b.acc.subj.wide$rt.stroop))
+text(0.45, 75, labels = expression(bold(hat('y')) == bold('x') * beta[0]))
+abline(h = mean(stroop.b.acc.subj.wide$rt.stroop), lty = "dashed")
+text(
+  0.1,
+  mean(stroop.b.acc.subj.wide$rt.stroop) + 10,
+  expression(
+    paste("mean of ", bold("y", sep = ""))
+    )
+  )
+```
+
+The y axis is the Stroop effect in RT that I caluclated earlier.
+The x axis is our "independent variable": $\mathbf{x}_0$ (which is equal to 1 for all participants).
+Note that it's not really much of an "independent variable", however, as it is set to 1 for all participants (it has no variance).
+I've overlayed the line that the regression finds: $\hat{\textbf{y}} = \mathbf{x}_0\beta_0$.
+The $\textbf{y}$ values along the line --- the prediction that the model makes --- are represented by $\hat{\textbf{y}}$.
+Again, the 'hat' indicates that the number is *estimated* or *predicted*.
+
+Notice that the line runs through the origin ($\mathbf{x}_0$ = 0, $\mathbf{y}$ = 0).
+You can see why this is the case by considering the formula $\hat{\textbf{y}} = \mathbf{x}_0\beta_0$.
+Plugging in zero for either $\textbf{x}_0$ or $\textbf{y}$ will lead you to the other side of the equation equaling zero.
+Also, notice also the line runs through the mean of the data ($\text{mean}(\textbf{y})$).
+This is because the mean of $\textbf{y}$ *is* the single value that minimizes the sum of squared errors.
+That is, for a given sample ($\textbf{y}$), the variance around a given point is smallest at the mean.
+
+Now think back to grade school algebra.
+The slope of a line is $\text{slope} = \frac{\Delta y}{\Delta x} = \frac{y_2 - y_1}{x_2 - x_1}$ ("the change in y over the change in x").
+Setting all $\textbf{x}_0$'s equal to 1 allows us to simplify this fraction nicely:
+$\text{slope} = \frac{y_2 - y_1}{x_2 - x_1} = \frac{\text{mean}(\textbf{y}) -0}{1 - 0} = \text{mean}(\textbf{y})$.
+
+Thus, the way we have set this regression model up (the $\textbf{x}_0$)) tests the exact hypothesis that the t-test did.
+Saying this another way, the t-test *is* a linear model.
+The basic idea is to test whether there is a *linear difference* between a sample mean and a reference value.
+Here, the sample mean was the mean Stroop effect across subjects, and the reference value was 0.
+**The slope of the line connecting these points, $\hat\beta_0$, gives the mean difference**.
+The same basic idea applies to more complicated regression models: *linear contrasts* between the magnitude of different $\beta$s can be set up and tested via regression framework.
+
+#### (C) Performing the paired samples t-test ("dependent two-sample t-test").
+
+Another way of thinking about this same problem is via what's called a **two-sample t-test, with dependent samples**.
+Above, in the one-sample t-test, we contrasted the mean Stroop effect against zero:
+$t = \frac{\hat\beta_{\text{Stroop}} - 0}{\text{se}(\hat\beta_{\text{Stroop}} - 0)}$.
+Instead, we can also think about it as contrasting the incongruent RT directly against the congruent RTs: $t = \frac{\hat\beta_{\text{incon.}} - \hat\beta_{\text{con.}}}{\text{se}(\hat\beta_{\text{incon.}} - \hat\beta_{\text{con.}})}$.
+These two formulas are algebraically identical.
+However, they represent different ways of thinking about the same problem.
+
+Performing this "paired sample" t-test in R is simple.
+Note that, the subtraction is now performed by the `t.test()` function itself (we do not need to compute the Stroop effect).
+```{r}
+t.test(stroop.b.acc.subj.wide$rt.incon, stroop.b.acc.subj.wide$rt.con, paired = TRUE)
+```
+Note also that the `paired` argument is set to `TRUE`.
+This tells R that the values in each column come from the same set of participants.
+In effect, this tells R to *subtract* each participants' congruent RT from their incongruent RT.
+Doing this removes each subject's "baseline" RT from their incongruent values.
+Removing each subject's baseline **reduces the variability of the measure**, which in turn reduces the denominator of the t value (making it larger).
+
+Of course, this test leads to the same result as the one's before (because the formulas are equivalent).
+But this paired-samples t-test is useful for illustration: it has an analogous formulation within regression.
+
+#### (D) Performing the paired sample t-test via regression.
+
+We can formulate the paired-sample t-test within regression.
+Note that now, the contrast is not between the mean of a single variable and a fixed value ($\hat\beta_{\text{Stroop}} - 0$); the contrast is between the means of two different variables ($\hat\beta_{\text{incon.}} - \hat\beta_{\text{incon.}}$.
+Thus, we need to expand our regression formula to capture both of these variables:
+
+\[\textbf{y} = \mathbf{x}_1\beta_1 + \beta_0 + \boldsymbol{\epsilon}\]
+
+We would say that this model has one "regressor" or "predictor" ($\mathbf{x}_1$), and an intercept term ($\mathbf{x}_0$), which is not displayed in the equation but is implicit.
+We define $\mathbf{x}_1$ to indicate *the incongruent condition*.
+That is, $\mathbf{x}_1 = 1$ whenever the condition is incongruent, and $\mathbf{x}_1 = 0$ whenever the condition is congruent.
+The intercept ($\mathbf{x}_0$) has now become our "placeholder" for congruent trials.
+
+This is how we fit the model.
+```{r}
+fit.twosamp <- lm(rt ~ trial.type + 1, data = stroop.b.acc.subj)
+```
+Note that we now have to use the "longform" data.frame, as we use the `trial.type` column to create the  $\mathbf{x}_1$.
+R will automatically create the $x_1$ column with the `trial.type` column in the data.frame.
+
+Graphically, this is what the model looks like:
+```{r}
+stroop.b.acc.subj$trial.type.integer <- ifelse(stroop.b.acc.subj$trial.type == "c", 0, 1)
+b0 <- coef(summary(fit.twosamp))["(Intercept)", "Estimate"]
+b1 <- coef(summary(fit.twosamp))["trial.typei", "Estimate"]
+
+plot(
+  x = stroop.b.acc.subj$trial.type.integer, 
+  y = stroop.b.acc.subj$rt,
+  xlim = c(0, 1.25),
+  xlab = expression(bold('x')),
+  ylab = expression(bold('y'))
+  )
+
+abline(
+  a = b0,  ## y-intercept
+  b = b1  ## slope
+  )
+text(0.65, 900, labels = expression(bold(hat('y'))  == bold('x'[1]) * beta[1] + bold('x'[0]) * beta[0]))
+
+abline(h = b0, lty = "dashed")
+text(x = 0.2, y = b0 - 25, lab = expression(beta[0]))
+
+abline(h = b0 + b1, lty = "dashed")
+text(x = 1.15, y = b0 + b1 - 25 , labels = expression(beta[1] + beta[0]))
+lines.within.subj <- data.frame(
+  y.value = c(
+    stroop.b.acc.subj.wide$rt.con,
+    c(stroop.b.acc.subj.wide$rt.con + stroop.b.acc.subj.wide$rt.incon)
+  )
+)
+```
+
+Basically, we've just restructured the regression, putting each subject's congruent RTs at $\mathbf{x} = 0$ and incongruent RTs at $\mathbf{x} = 1$.
+The line of best fit runs between the means of each group.
+
+The **y-intercept** --- the value of $\mathbf{\hat y}$ where $\mathbf{x} = 0$ ---  is given by $\beta_0$.
+The **slope**, $\beta_1$, indicates the *mean difference* between incongruent and congruent RTs (the Stroop effect).
+
+These values can be accessed via this expression:
+```{r}
+coef(summary(fit.twosamp))
+```
+The `Estimate` column indicates the value of the estimated coefficients ($\beta$s).
+The `(Intercept)` row corrresponds to the intercept ($\mathbf{x}_0$), and the `trial.typei` corresponds to the slope ($\mathbf{x}_1$).
+
+Note that the Stroop effect ($\beta_1$)is exactly the same as it was before:
+```{r}
+mean(stroop.b.acc.subj.wide$rt.stroop)
+```
+
+But, notice that the t-test from this model has changed from the values we saw previously.
+The t-test for the Stroop effect is indicated by the cell in the `t value` column and the `trial.typei` row.
+The value is greatly reduced from what it was previously.
+```{r}
+t.test(stroop.b.acc.subj.wide$rt.incon, stroop.b.acc.subj.wide$rt.con, paired = TRUE)  ## before
+coef(summary(fit.twosamp))["trial.typei", "t value"]  ## now
+```
+
+Essentially, this reduction in the t value is because we conducted the regression as if there were different participants in each condition.
+This is equivalent to performing an *unpaired* (i.e., independent samples) t-test:
+```{r}
+t.test(stroop.b.acc.subj.wide$rt.incon, stroop.b.acc.subj.wide$rt.con, paired = FALSE)$statistic
+```
+The t value is reduced in this scenario because the *between participant variability in RT has not been removed*.
+That is, the denominator of the t-value contains a lot of *extra* variability (differences in subject's 'basline' RT).
+
+To remove this variability within the context of regression, we can just add a predictor to our model;  a predictor for *subject*.
+```{r}
+fit.twosamp.paired <- lm(rt ~ trial.type + subj + 1, data = stroop.b.acc.subj)
+```
+Adding this predictor for subject essentially "partials out" (removes, subtracts) all the variance in $\mathbf{y}$ due to participants' "baseline" RT.
+This "partialing out" decreases the amount of variance in the error term $\sigma^2 = \text{var}(\boldsymbol{\epsilon})$.
+Recall that $\sigma$ enters into the denominator of the t-test equation: 
+
+\[t = \frac{\hat\beta_1 - \hat\beta_2}{\text{se}(\hat\beta_1 - \hat\beta_2)} = \frac{\hat\beta_1 - \hat\beta_2}{\sigma/\sqrt{n}}\]
+
+As a result, removing this *between subject* variance increases the size of the t statistic (increasing power), and makes this test exactly equivalent to conducting a paired-comparisons t-test.
+Confirming this, we see that fitting this model yields an identical t-value to the ones we obtained before:
+```{r}
+coef(summary(fit.twosamp.paired))["trial.typei", "t value"]
+```
+
+#### Assignment.
+
+Conducting the same t-test by fitting these different models was mostly an exercise to tie regression to basic statistical hypothesis testing.
+In practice, performing this just once would suffice; probably the simplest way would be to just conduct a paired sample t-test via `t.test(..., paired = TRUE)`.
+
+However, it might be useful practice to replicate these analyses in the other tasks.
+You can read in the other spreadsheets, perform similar data cleaning and preparation procedures, fit these linear models, plot the results, and interpret.
+Most of the code can probably be adapted from what I've written here.
+
+
+FOR MIKE TO ADD:
+
+1. finish analysis 1
+   + plotting stroop effects
+2. modeling single subjects
+   + stroop: pick best subj
+   + other tasks
+3. assessing reliability
+   + sample task: stroop between bas and pro
+   + assignment:  other tasks; cross-session, split half
+
+
+### Analysis 2. Building models of single subjects.
+
+```{r}
+set.seed(0)
+sample.subjs <- sample(unique(stroop.b.acc$subj), 10)
+stroop.b.acc.samp <- stroop.b.acc[stroop.b.acc$subj %in% sample.subjs, ]
+stroop.p.acc.samp <- stroop[which(stroop$session == "pro" & stroop$acc == 1 & stroop$subj %in% sample.subjs), ]
+
+library(ggplot2)
+theme_set(theme_bw(10))
+ggplot(stroop.b.acc.samp, aes(x = trial.num, y = rt)) +
+  geom_point() +
+  facet_grid(cols = vars(run), rows = vars(subj))
+ggplot(stroop.p.acc.samp, aes(x = trial.num, y = rt)) +
+  geom_point() +
+  facet_grid(cols = vars(run), rows = vars(subj))
+
+
+stroop.b.acc.samp$block.num <- ifelse(stroop.b.acc.samp$trial.num > 72, 3, ifelse(stroop.b.acc.samp$trial.num > 36, 2, 1))
+stroop.b.acc.samp$trial.in.block.num <- stroop.b.acc.samp$trial.num %% 36
+stroop.b.acc.samp$trial.in.block.num[stroop.b.acc.samp$trial.in.block.num == 0] <- 36
+
+stroop.p.acc.samp$block.num <- ifelse(stroop.p.acc.samp$trial.num > 72, 3, ifelse(stroop.p.acc.samp$trial.num > 36, 2, 1))
+stroop.p.acc.samp$trial.in.block.num <- stroop.p.acc.samp$trial.num %% 36
+stroop.p.acc.samp$trial.in.block.num[stroop.p.acc.samp$trial.in.block.num == 0] <- 36
+
+
+ggplot(stroop.b.acc.samp, aes(x = trial.num, y = rt)) +
+  geom_point() +
+  geom_smooth() +
+  facet_grid(cols = vars(run, block.num), rows = vars(subj), scales = "free_x")
+
+ggplot(stroop.p.acc.samp, aes(x = trial.num, y = rt)) +
+  geom_point() +
+  geom_smooth() +
+  facet_grid(cols = vars(run, block.num), rows = vars(subj), scales = "free_x")
+
+library(magrittr)
+library(dplyr)
+stroop.b.acc.samp$pc <- ifelse(stroop.b.acc.samp$color %in% c("blue", "red", "purple", "white"), "mc", "ub")
+stroop.b.acc.samp %<>%
+  arrange(subj, run, block.num, trial.type, pc, trial.num) %>%
+  group_by(subj, run, block.num, trial.type, pc) %>%
+  mutate(item.num = 1:n())
+
+stroop.p.acc.samp$pc <- ifelse(stroop.p.acc.samp$color %in% c("blue", "red", "purple", "white"), "mi", "ub")
+stroop.p.acc.samp %<>%
+  arrange(subj, run, block.num, trial.type, pc, trial.num) %>%
+  group_by(subj, run, block.num, trial.type, pc) %>%
+  mutate(item.num = 1:n())
+
+ggplot(stroop.b.acc.samp, aes(x = item.num, y = rt, fill = trial.type)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_grid(cols = vars(pc), rows = vars(subj), scales = "free_x")
+
+ggplot(stroop.p.acc.samp, aes(x = item.num, y = rt, fill = pc, color = pc)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_grid(cols = vars(trial.type, run, block.num), rows = vars(subj), scales = "free_x") +
+  coord_cartesian(ylim = c(0, 3000))
+
+
+stroop.b.acc.samp <- dplyr::mutate(
+  stroop.b.acc.samp,
+  tt01 = dplyr::lag(trial.type),
+  tt02 = dplyr::lag(tt01),
+  tt03 = dplyr::lag(tt02),
+  tt04 = dplyr::lag(tt03),
+  tt05 = dplyr::lag(tt04),
+  tt06 = dplyr::lag(tt05),
+  tt07 = dplyr::lag(tt06),
+  tt08 = dplyr::lag(tt07),
+  tt09 = dplyr::lag(tt08),
+  tt10 = dplyr::lag(tt09)
+  )
+
+stroop.b.acc.samp <- stroop.b.acc.samp[stroop.b.acc.samp$trial.in.block.num > 3, ]
+stroop.b.acc.samp$resid <- c(
+  resid(
+    lm(
+      rt ~ trial.type * tt01 * tt02 * tt03 + trial.num,
+      stroop.b.acc.samp,
+      subset = subj == sample.subjs[2]
+      )
+    ),
+  resid(
+    lm(
+      rt ~ trial.type * tt01 * tt02 * tt03 + trial.num,
+      stroop.b.acc.samp,
+      subset = subj == sample.subjs[3]
+      )
+    ),
+  resid(
+    lm(
+      rt ~ trial.type * tt01 * tt02 * tt03 + trial.num,
+      stroop.b.acc.samp,
+      subset = subj == sample.subjs[1]
+      )
+  )
+)
+
+ggplot(stroop.b.acc.samp, aes(x = item.num, y = resid, fill = pc)) +
+  geom_point() +
+  geom_smooth() +
+  facet_grid(cols = vars(trial.type, run), rows = vars(subj), scales = "free_x")
+
+
+stroop.p.acc.samp %<>% 
+  group_by(subj, run, block.num) %>%
+  arrange(subj, run, trial.num) %>%
+  mutate(
+    tt01 = lag(trial.type),
+    tt02 = lag(tt01),
+    tt03 = lag(tt02),
+    tt04 = lag(tt03),
+    tt05 = lag(tt04),
+    tt06 = lag(tt05),
+    tt07 = lag(tt06),
+    tt08 = lag(tt07),
+    tt09 = lag(tt08),
+    tt10 = lag(tt09)
+    )
+# stroop.p.acc.samp <- stroop.p.acc.samp[stroop.p.acc.samp$trial.in.block.num > 3, ]
+stroop.p.acc.samp %<>% filter(subj %in% sample.subjs, !is.na(trial.num), !is.na(tt01), !is.na(tt02), !is.na(tt03)) 
+stroop.p.acc.samp$resids <- stroop.p.acc.samp %>% 
+  split(.$subj) %>%
+  lapply(
+    FUN = function(x) lm(rt ~ trial.type * tt01 * tt02 * tt03 + trial.num, x)
+  ) %>% 
+  lapply(resid) %>%
+  unlist
+
+# stroop.p.acc.samp$resid <- c(
+#   resid(
+#     lm(
+#       rt ~ trial.type * tt01 * tt02 * tt03 + trial.num,
+#       stroop.p.acc.samp,
+#       subset = subj == sample.subjs[2]
+#       )
+#     ),
+#   resid(
+#     lm(
+#       rt ~ trial.type * tt01 * tt02 * tt03 + trial.num,
+#       stroop.p.acc.samp,
+#       subset = subj == sample.subjs[3]
+#       )
+#     ),
+#   resid(
+#     lm(
+#       rt ~ trial.type * tt01 * tt02 * tt03 + trial.num,
+#       stroop.p.acc.samp,
+#       subset = subj == sample.subjs[1]
+#       )
+#   )
+# )
+
+ggplot(stroop.p.acc.samp, aes(x = item.num, y = resid, fill = pc)) +
+  geom_point() +
+  geom_smooth() +
+  facet_grid(cols = vars(trial.type, run), rows = vars(subj), scales = "free_x")
+
+
+```
+
