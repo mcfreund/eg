@@ -1,8 +1,11 @@
 ## permuted p values for linear model ---
 
 lm.permute <- function(df, yname, nresamples = 1E4, add.intercept = TRUE) {
-  ## NB: NOT CONFIGURED FOR USE WITH is.factor(df$column).
-  ## levels of categorical IVs must be specified by separate integer columns (e.g., as dummy variables).
+  ## NB: NOT CONFIGURED FOR USE WHEN is.factor(df$column).
+  ## categorical IVs can still be used, but the levels just need to be specified as separate integer columns
+  ## (e.g., dummy variables).
+  
+  if (any(sapply(df, is.factor))) stop("NOT CONFIGURED FOR USE WITH FACTOR CLASS")
   
   ## get observed estimates ----
   
@@ -40,4 +43,5 @@ lm.permute <- function(df, yname, nresamples = 1E4, add.intercept = TRUE) {
 }
 
 df <- as.data.frame(matrix(rnorm(800), ncol = 8))
+df$V7 <- as.factor(round(rnorm(100, 3)))
 lm.permute(df, "V1")
