@@ -1,11 +1,6 @@
 ## given set of regressors, fit all unique combinations and store results in list
 ## requires gtools for combinations() function
  
-## create sample data ----
-df <- as.data.frame(matrix(rnorm(1000), ncol = 10))
-cols <- names(df)
-
-## model comparison ----
 
 lm.allcombs <- function(df, yname) {
   ## dependencies: gtools()
@@ -45,23 +40,19 @@ lm.allcombs <- function(df, yname) {
 
 ## use ----
 
+df <- as.data.frame(matrix(rnorm(1000), ncol = 10))
+
 l <- lm.allcombs(df, "V8")  ## to use
 
 bics <- sapply(l, BIC)
 aics <- sapply(l, AIC)
 
-which.min(aics)
-which.min(bics)
-
-order(aics)
-order(bics)
-
 plot(bics, aics)  ## how great is spread between best and next-best models?
 
-lmods[order(bics)[1:4]]  ## best 4
-lmods[order(aics)[1:4]]  ## best 4
+l[order(bics)[1:4]]  ## best 4
+l[order(aics)[1:4]]  ## best 4
 
 fit.best <- l[[which.min(bics)]]
 fit.best.coef <- coef(summary(fit.best))
-cols.best <- names(coef(fit.best))[-1]
+iv.best <- names(coef(fit.best))[-1]  ## explanatory variables w/ lowest BIC
 
