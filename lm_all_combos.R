@@ -4,7 +4,7 @@
 
 lm.allcombs <- function(df, yname) {
   ## dependencies: gtools()
-  ## warning: number of models fit increases exponentially with number of explanatory variables
+  ## warning: number of models fit increases exponentially with ncol(df)
 
   ## model comparison ----
   
