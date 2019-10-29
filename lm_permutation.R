@@ -43,5 +43,4 @@ lm.permute <- function(df, yname, nresamples = 1E4, add.intercept = TRUE) {
 }
 
 df <- as.data.frame(matrix(rnorm(800), ncol = 8))
-df$V7 <- as.factor(round(rnorm(100, 3)))
 lm.permute(df, "V1")
