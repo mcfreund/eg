@@ -5,7 +5,7 @@ output: github_document
 
 
 ```{r setup, include = FALSE}
-knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', fig.width = 3, fig.height = 3)
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', fig.width = 3, fig.height = 3, cache = TRUE)
 ```
 
 Today I found a solution to a ggplotting problem that I've hit my head on enough times this past semester to make me sufficiently excited to write something up and share with whomever might see.
@@ -194,19 +194,21 @@ Notice how the parametric CI underpredicts the variance when x is high, and over
 Once I had specified the general form of this `stat_boot_ci()` function, I realized that it could be easily optimized.
 In particular, the `lm()` function is [slow](https://rpubs.com/maechler/fast_lm) and provides many unneccesary things --- when in fact 
 all we need to compute is $\mathbf{\hat y}$.
-And while there are faster `lm` alternatives, both in [base](https://www.rdocumentation.org/packages/stats/versions/3.6.1/topics/lm.fit) [`lm.fit()`], and in [`RccpEigen`](https://www.rdocumentation.org/packages/RcppEigen/versions/0.3.3.5.0) [`fastLm()`], even these light-weight functions are doing much more lifting than required.
+And while there are faster `lm` alternatives, both [in base](https://www.rdocumentation.org/packages/stats/versions/3.6.1/topics/lm.fit), and [in `RccpEigen`](https://www.rdocumentation.org/packages/RcppEigen/versions/0.3.3.5.0), even these light-weight functions are doing much more lifting than required.
 
 The general problem is simple least squares:
-\[\mathbf{\hat y} = \mathbf{x}b_1 + b_0\],
+\[\mathbf{\hat y} = \mathbf{x}b_1 + b_0\]
 that is, where $\mathbf{x}$ is a column vector and the $b$s are scalars.
 In particular, estimates of the variability in $\mathbf{\hat y}$s across the range of $\mathbf{x}$ is desired.
-This is accomplished by (1) resampling rows of $\mathbf{x}$ and $\mathbf{y}$ $P$ times, forming sets of resampled vectors $\mathbf{x}^*(p)$ and $\mathbf{y}^*(p)$ where $p = 1, 2, ..., P$, (2) estimating $b^*_0(p)$ for each set, (3) and applying each of these resampled estimates to the original $\mathbf{x}$ values:
-\[\mathbf{\hat y}^*(i) = \mathbf{x}b_1^*(i) + b_0^*(i)\].
-Estimating $b^*$s can be done in a number of ways.
+A bootstrapped distribution of $\mathbf{\hat y}$s, written as the asterisked $\mathbf{\hat y}^*$, is obtained by (1) resampling rows of $\mathbf{x}$ and $\mathbf{y}$ $N$ times, forming sets of $N$ resampled vectors $\mathbf{x}^*$ and $\mathbf{y}^*$, (2) estimating corresponding $b^*_0$ and $b^*_1$, (3) then applying each of these bootstrapped coefficients to the original $\mathbf{x}$:
+\[\mathbf{\hat y}^* = \mathbf{x}b_1^* + b_0^*\]
+
+Estimating $b^*$s can be done in a number of algebraically equivalent ways.
+But, these ways are likely not eqivalent in terms of computational efficiency.
 
 One method is terms of linear correlation and standard deviation:
 \[b_1^* = \text{cor}(\mathbf{x}^*, \mathbf{y}^*) \tfrac{\text{sd}(\mathbf{y}^*)} {\text{sd}(\mathbf{x}^*)}\]
-\[b_0^* = \bar y^* - \bar x^* b_1^*\],
+\[b_0^* = \bar y^* - \bar x^* b_1^*\]
 where the bar indicates the mean. 
 This formulation is as simple as it gets.
 
@@ -296,33 +298,11 @@ I verify this by embedding these methods within `sapply()` loops and running the
 ```{r}
 ## test within sapply() loop ----
 
-## first validate:
-
 x <- rnorm(100)
 y <- rnorm(100)
 data <- data.frame(x = x, y = y)
 grid <- data.frame(x = data$x)
-set.seed(0)
-p1 <- sapply(
-  seq_len(10),
-  function(.) {
-    s <- sample.int(length(grid$x), replace = TRUE)
-    b1 <- cor(x[s], y[s]) * sd(y[s]) / sd(x[s])
-    b0 <- mean(y[s]) - b1 * mean(x[s])
-    b1 * x + b0
-  }
-)
-X <- cbind(rep(1, length(x)), x)
-set.seed(0)
-p2 <- sapply(
-  seq_len(10),
-  function(.) {
-    samp <- sample.int(length(grid$x), replace = TRUE)
-    Xsamp <- X[samp, ]
-    X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])
-  }
-)
-all.equal(c(p2), c(p1))
+
 
 ## now test:
 
@@ -356,12 +336,54 @@ mbm <- microbenchmark(
     }
 )
 
+mbm
+autoplot(mbm)
+
 ```
 `solve()` it is.
 
 
 ## the final function
 ```{r}
+
+BootCI <- ggplot2::ggproto(
+  "BootCI", ggplot2::Stat, 
+  required_aes = c("x", "y"),
+  compute_group = function(data, scales, params, n = 1000, percent = 95) {
+    
+    grid <- data.frame(x = data$x)
+    X <- cbind(rep(1, length(x)), x)  ## design matrix (includes intercept)
+    
+    predictions <- sapply(
+      seq_len(n),
+      function(.) {
+        samp <- sample.int(length(grid$x), replace = TRUE)
+        Xsamp <- X[samp, ]
+        X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])  ## get bs then dot with X
+      }
+    )
+    
+    .alpha <- (100 - percent) / 200  ## 2 tailed
+    grid$ymax <- apply(predictions, 1, quantile, 1 - .alpha)
+    grid$ymin <- apply(predictions, 1, quantile, .alpha)
+    
+    grid
+    
+  }
+)
+
+stat_boot_ci <- function(mapping = NULL, data = NULL, geom = "ribbon",
+                         position = "identity", na.rm = FALSE, show.legend = NA, 
+                         inherit.aes = TRUE, n = 1000, percent = 95, ...) {
+  ## see: https://cran.r-project.org/web/packages/ggplot2/vignettes/extending-ggplot2.html
+  
+  ggplot2::layer(
+    stat = BootCI, data = data, mapping = mapping, geom = geom, 
+    position = position, show.legend = show.legend, inherit.aes = inherit.aes,
+    params = list(n = n, percent = percent, na.rm = na.rm, ...)
+  )
+  
+}
 
 
 ```

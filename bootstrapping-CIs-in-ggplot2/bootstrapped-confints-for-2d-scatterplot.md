@@ -255,9 +255,13 @@ one method of many. For example, R can solve this system of linear
 equations via, well, `solve()`, or singular value decomposition can be
 used, as well.
 
-So, I’m unsure which method might be the most efficient. Below, I use
-the microbenchmark package to compare various methods, with code cribbed
-from [this page](https://www.alexejgossmann.com/benchmarking_r/).
+I’m unsure which method might be the most efficient.
+
+So, I use the microbenchmark package to compare the speed of these
+methods below, with code cribbed from [this
+page](https://www.alexejgossmann.com/benchmarking_r/). This test also
+includes a check to make sure the methods yield equivalent
+\(\mathbf{\hat y}\)s.
 
 ``` r
 library(microbenchmark)
@@ -323,11 +327,11 @@ mbm  ## lin.sys wins! (but cor close behind)
 
     ## Unit: microseconds
     ##     expr    min      lq     mean  median      uq     max neval cld
-    ##       lm 1829.3 2579.15 3733.529 3594.00 4602.20  8173.3   100  b 
-    ##      cor  100.0  157.45  239.177  210.95  311.05   595.1   100 a  
-    ##      svd 4340.1 5523.75 7209.546 6841.20 8563.00 13385.0   100   c
-    ##     pinv 4089.3 5370.70 7728.104 6908.80 8419.40 66949.0   100   c
-    ##  lin.sys   56.3   99.20  144.618  140.50  167.00   397.3   100 a
+    ##       lm 1844.2 3738.95 4896.331 4369.55 5152.00 25410.2   100  b 
+    ##      cor  123.1  221.25  294.845  269.55  342.55   648.8   100 a  
+    ##      svd 4212.4 6187.60 8394.512 7910.10 9752.80 20727.0   100   c
+    ##     pinv 4263.9 7275.20 8383.020 8191.10 9563.60 20358.5   100   c
+    ##  lin.sys   51.9  114.50  224.696  156.90  196.65  4640.7   100 a
 
 ``` r
 autoplot(mbm)
@@ -337,8 +341,12 @@ autoplot(mbm)
 
 <img src="bootstrapped-confints-for-2d-scatterplot_files/figure-gfm/unnamed-chunk-7-1.png" style="display: block; margin: auto;" />
 
-Small differences between the correlation method and letting R
-`solve()`.
+The correlation method and letting R `solve()` seem to be the fastest,
+with a slight advantage for the matrix approach. This small advantage
+would be amplified with increasing numbers of iterations, so the
+`solve()` approach, although only slightly faster, might be preferable
+to `cor()`. I verify this by embedding these methods within `sapply()`
+loops and running the microbenchmark on these loops.
 
 ``` r
 ## test within sapply() loop ----
@@ -408,4 +416,6 @@ mbm <- microbenchmark(
 )
 ```
 
-## Final function.
+`solve()` it is.
+
+## the final function
