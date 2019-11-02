@@ -173,16 +173,195 @@ stat_boot_ci <- function(mapping = NULL, data = NULL, geom = "ribbon",
 
 ```
 
-The page https://cran.r-project.org/web/packages/ggplot2/vignettes/extending-ggplot2.html was an immense help to this end, and more generally, was a pretty illuminating walk-through about the guts of ggplot2.
+I cribbed some of this from [here](https://cran.r-project.org/web/packages/ggplot2/vignettes/extending-ggplot2.html), which gives an illuminating walk-through of the guts of ggplot2.
 
 To see our `stat_boot_ci()` function in its glory, I use it below, on our highly heteroskedastic data.
-I compare the bootstrapped CI to a parametric one from `geom_smooth()`; the `geom_smooth()` is displayed underneath, in red.
+I compare the bootstrapped CI to a parametric one from `geom_smooth()`.
+The `geom_smooth()` is displayed underneath, in red.
 
 ```{r, fig.height = 4, fig.width = 5}
 
 p +
-  geom_smooth(method = "lm", se = TRUE, fill = "red", alpha = 1) +
+  geom_smooth(method = "lm", se = TRUE, fill = "red", alpha = 0.3) +
   stat_boot_ci(alpha = 0.3, n = 1E4, percent = 95)
 
 ```
 Notice how the parametric CI underpredicts the variance when x is high, and overpredicts when x is low.
+
+
+## update: a faster solution
+
+Once I had specified the general form of this `stat_boot_ci()` function, I realized that it could be easily optimized.
+In particular, the `lm()` function is [slow](https://rpubs.com/maechler/fast_lm) and provides many unneccesary things --- when in fact 
+all we need to compute is $\mathbf{\hat y}$.
+And while there are faster `lm` alternatives, both in [base](https://www.rdocumentation.org/packages/stats/versions/3.6.1/topics/lm.fit) [`lm.fit()`], and in [`RccpEigen`](https://www.rdocumentation.org/packages/RcppEigen/versions/0.3.3.5.0) [`fastLm()`], even these light-weight functions are doing much more lifting than required.
+
+The general problem is simple least squares:
+\[\mathbf{\hat y} = \mathbf{x}b_1 + b_0\],
+that is, where $\mathbf{x}$ is a column vector and the $b$s are scalars.
+In particular, estimates of the variability in $\mathbf{\hat y}$s across the range of $\mathbf{x}$ is desired.
+This is accomplished by (1) resampling rows of $\mathbf{x}$ and $\mathbf{y}$ $P$ times, forming sets of resampled vectors $\mathbf{x}^*(p)$ and $\mathbf{y}^*(p)$ where $p = 1, 2, ..., P$, (2) estimating $b^*_0(p)$ for each set, (3) and applying each of these resampled estimates to the original $\mathbf{x}$ values:
+\[\mathbf{\hat y}^*(i) = \mathbf{x}b_1^*(i) + b_0^*(i)\].
+Estimating $b^*$s can be done in a number of ways.
+
+One method is terms of linear correlation and standard deviation:
+\[b_1^* = \text{cor}(\mathbf{x}^*, \mathbf{y}^*) \tfrac{\text{sd}(\mathbf{y}^*)} {\text{sd}(\mathbf{x}^*)}\]
+\[b_0^* = \bar y^* - \bar x^* b_1^*\],
+where the bar indicates the mean. 
+This formulation is as simple as it gets.
+
+Another is in terms of linear algebra
+<!-- \[\mathbf{b}^* = (\mathbf{X}^{*\text{T}}\mathbf{X}^*)^{-1}\mathbf{X}^{*\text{T}}\mathbf{y}^*\] -->
+\[\mathbf{b}^* =  \mathbf{X}^{*\dagger} \mathbf{y}^*\]
+where $\mathbf{b}^*$ is now a 2-dimensional column vector, $\mathbf{X}^*$ is a matrix with a column $\mathbf{x}^*$ and a column of all-ones, and $\dagger$ indicates the pseudo-inverse.
+This approach would use matrix packages, and while these packages are generally fast, it feels a little like cutting a steak with a sword.
+However, this approach could easily accommodate multiple regressors, should I desire to extend my plotting function to mulitple regression in the future. 
+Also, the pseudoinverse does not need to be explicitly calculated; the above formulation is just one method of many.
+For example, R can solve this system of linear equations via, well, `solve()`, or singular value decomposition can be used, as well.
+
+I'm unsure which method might be the most efficient.
+
+So, I use the microbenchmark package to compare the speed of these methods below, with code cribbed from [this page](https://www.alexejgossmann.com/benchmarking_r/).
+This test also includes a check to make sure the methods yield equivalent $\mathbf{\hat y}$s.
+
+```{r}
+
+library(microbenchmark)
+n <- 1000
+x <- rnorm(n)
+X <- cbind(rep(1, length(x)), x)  ## add intercept
+y <- rnorm(n)
+
+check_for_equal_coefs <- function(values) {
+  tol <- 1e-12
+  max_error <- max(
+    c(
+      abs(values[[1]] - values[[2]]),
+      abs(values[[2]] - values[[3]]),
+      abs(values[[1]] - values[[3]]),
+      abs(values[[1]] - values[[4]]),
+      abs(values[[1]] - values[[5]])
+    )
+  )
+  max_error < tol
+}
+
+mbm <- microbenchmark(
+  
+  "lm" = {
+    
+    y.hat <- predict(lm(y ~ x))
+    
+    },
+  
+  "cor" = {
+    
+    b1 <- cor(x, y) * sd(y) / sd(x)
+    b0 <- mean(y) - b1 * mean(x)
+    y.hat <- b1 * x + b0
+    
+    },
+  
+  "svd" = {
+    
+    y.hat <- svd(X)$u %*% t(svd(X)$u) %*% y
+    
+    },
+  
+  "pinv" = {
+    
+    y.hat <- X %*% solve(t(X) %*% X) %*% t(X) %*% y
+
+    },
+  
+  "lin.sys" = {
+    
+    y.hat <- c(X %*% solve(t(X) %*% X, t(X) %*% y))
+    
+    },
+  
+  check = check_for_equal_coefs
+  
+  )
+
+mbm  ## lin.sys wins! (but cor close behind)
+autoplot(mbm)
+```
+
+
+The correlation method and letting R `solve()` seem to be the fastest, with a slight advantage for the matrix approach.
+This small advantage would be amplified with increasing numbers of iterations, so the `solve()` approach, although only slightly faster, might be preferable to `cor()`.
+I verify this by embedding these methods within `sapply()` loops and running the microbenchmark on these loops.
+
+```{r}
+## test within sapply() loop ----
+
+## first validate:
+
+x <- rnorm(100)
+y <- rnorm(100)
+data <- data.frame(x = x, y = y)
+grid <- data.frame(x = data$x)
+set.seed(0)
+p1 <- sapply(
+  seq_len(10),
+  function(.) {
+    s <- sample.int(length(grid$x), replace = TRUE)
+    b1 <- cor(x[s], y[s]) * sd(y[s]) / sd(x[s])
+    b0 <- mean(y[s]) - b1 * mean(x[s])
+    b1 * x + b0
+  }
+)
+X <- cbind(rep(1, length(x)), x)
+set.seed(0)
+p2 <- sapply(
+  seq_len(10),
+  function(.) {
+    samp <- sample.int(length(grid$x), replace = TRUE)
+    Xsamp <- X[samp, ]
+    X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])
+  }
+)
+all.equal(c(p2), c(p1))
+
+## now test:
+
+mbm <- microbenchmark(
+  
+  "cor" = {
+    
+    sapply(
+      seq_len(1000),
+      function(.) {
+        s <- sample.int(length(grid$x), replace = TRUE)
+        b1 <- cor(x[s], y[s]) * sd(y[s]) / sd(x[s])
+        b0 <- mean(y[s]) - b1 * mean(x[s])
+        b1 * x + b0
+      }
+    )
+    
+  },
+  
+  "lin.sys" = {
+    
+    sapply(
+      seq_len(1000),
+      function(.) {
+        samp <- sample.int(length(grid$x), replace = TRUE)
+        Xsamp <- X[samp, ]
+        X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])
+      }
+    )
+    
+    }
+)
+
+```
+`solve()` it is.
+
+
+## the final function
+```{r}
+
+
+```

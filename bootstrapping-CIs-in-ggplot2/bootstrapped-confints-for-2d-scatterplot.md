@@ -189,19 +189,18 @@ stat_boot_ci <- function(mapping = NULL, data = NULL, geom = "ribbon",
 }
 ```
 
-The page
-<https://cran.r-project.org/web/packages/ggplot2/vignettes/extending-ggplot2.html>
-was an immense help to this end, and more generally, was a pretty
-illuminating walk-through about the guts of ggplot2.
+I cribbed some of this from
+[here](https://cran.r-project.org/web/packages/ggplot2/vignettes/extending-ggplot2.html),
+which gives an illuminating walk-through of the guts of ggplot2.
 
 To see our `stat_boot_ci()` function in its glory, I use it below, on
 our highly heteroskedastic data. I compare the bootstrapped CI to a
-parametric one from `geom_smooth()`; the `geom_smooth()` is displayed
+parametric one from `geom_smooth()`. The `geom_smooth()` is displayed
 underneath, in red.
 
 ``` r
 p +
-  geom_smooth(method = "lm", se = TRUE, fill = "red", alpha = 1) +
+  geom_smooth(method = "lm", se = TRUE, fill = "red", alpha = 0.3) +
   stat_boot_ci(alpha = 0.3, n = 1E4, percent = 95)
 ```
 
@@ -209,110 +208,204 @@ p +
 Notice how the parametric CI underpredicts the variance when x is high,
 and overpredicts when x is low.
 
-<!-- ## a simulation: correlation coefficient p-values derived from normality assumption are biased under heteroskedasticity -->
+## update: a faster solution
 
-<!-- Here, I convince myself that heteroskedasticity can be a problem for parametric stats of correlations. -->
+Once I had specified the general form of this `stat_boot_ci()` function,
+I realized that it could be easily optimized. In particular, the `lm()`
+function is [slow](https://rpubs.com/maechler/fast_lm) and provides many
+unneccesary things — when in fact all we need to compute is
+\(\mathbf{\hat y}\). And while there are faster `lm` alternatives, both
+in
+[base](https://www.rdocumentation.org/packages/stats/versions/3.6.1/topics/lm.fit)
+\[`lm.fit()`\], and in
+[`RccpEigen`](https://www.rdocumentation.org/packages/RcppEigen/versions/0.3.3.5.0)
+\[`fastLm()`\], even these light-weight functions are doing much more
+lifting than required.
 
-<!-- First I created three uncorrelated variables: `x`, `het`, and `hom`. -->
+The general problem is simple least squares:
+\[\mathbf{\hat y} = \mathbf{x}b_1 + b_0\], that is, where \(\mathbf{x}\)
+is a column vector and the \(b\)s are scalars. In particular, estimates
+of the variability in \(\mathbf{\hat y}\)s across the range of
+\(\mathbf{x}\) is desired. This is accomplished by (1) resampling rows
+of \(\mathbf{x}\) and \(\mathbf{y}\) \(P\) times, forming sets of
+resampled vectors \(\mathbf{x}^*(p)\) and \(\mathbf{y}^*(p)\) where
+\(p = 1, 2, ..., P\), (2) estimating \(b^*_0(p)\) for each set, (3) and
+applying each of these resampled estimates to the original
+\(\mathbf{x}\) values:
+\[\mathbf{\hat y}^*(i) = \mathbf{x}b_1^*(i) + b_0^*(i)\]. Estimating
+\(b^*\)s can be done in a number of ways.
 
-<!-- As you might guess `het` is heteroskedastic with x; `hom` is not. -->
+One method is terms of linear correlation and standard deviation:
+\[b_1^* = \text{cor}(\mathbf{x}^*, \mathbf{y}^*) \tfrac{\text{sd}(\mathbf{y}^*)} {\text{sd}(\mathbf{x}^*)}\]
+\[b_0^* = \bar y^* - \bar x^* b_1^*\], where the bar indicates the mean.
+This formulation is as simple as it gets.
 
-<!-- I did this many times, and recorded the p-values of `x ~ het` and `x ~ hom` derived from both the t-distribution (`cor.test()`) and our bootstrapped distribution (`boot.bivar()`). -->
+Another is in terms of linear algebra
+<!-- \[\mathbf{b}^* = (\mathbf{X}^{*\text{T}}\mathbf{X}^*)^{-1}\mathbf{X}^{*\text{T}}\mathbf{y}^*\] -->
+\[\mathbf{b}^* =  \mathbf{X}^{*\dagger} \mathbf{y}^*\] where
+\(\mathbf{b}^*\) is now a 2-dimensional column vector, \(\mathbf{X}^*\)
+is a matrix with a column \(\mathbf{x}^*\) and a column of all-ones, and
+\(\dagger\) indicates the pseudo-inverse. This approach would use matrix
+packages, and while these packages are generally fast, it feels a little
+like cutting a steak with a sword. However, this approach could easily
+accommodate multiple regressors, should I desire to extend my plotting
+function to mulitple regression in the future. Also, the pseudoinverse
+does not need to be explicitly calculated; the above formulation is just
+one method of many. For example, R can solve this system of linear
+equations via, well, `solve()`, or singular value decomposition can be
+used, as well.
 
-<!-- ```{r simulation} -->
+So, I’m unsure which method might be the most efficient. Below, I use
+the microbenchmark package to compare various methods, with code cribbed
+from [this page](https://www.alexejgossmann.com/benchmarking_r/).
 
-<!-- set.seed(1084) -->
+``` r
+library(microbenchmark)
+n <- 1000
+x <- rnorm(n)
+X <- cbind(rep(1, length(x)), x)  ## add intercept
+y <- rnorm(n)
 
-<!-- n.sims <- 1000 -->
+check_for_equal_coefs <- function(values) {
+  tol <- 1e-12
+  max_error <- max(
+    c(
+      abs(values[[1]] - values[[2]]),
+      abs(values[[2]] - values[[3]]),
+      abs(values[[1]] - values[[3]]),
+      abs(values[[1]] - values[[4]]),
+      abs(values[[1]] - values[[5]])
+    )
+  )
+  max_error < tol
+}
 
-<!-- p <- data.frame( -->
+mbm <- microbenchmark(
+  
+  "lm" = {
+    
+    y.hat <- predict(lm(y ~ x))
+    
+    },
+  
+  "cor" = {
+    
+    b1 <- cor(x, y) * sd(y) / sd(x)
+    b0 <- mean(y) - b1 * mean(x)
+    y.hat <- b1 * x + b0
+    
+    },
+  
+  "svd" = {
+    
+    y.hat <- svd(X)$u %*% t(svd(X)$u) %*% y
+    
+    },
+  
+  "pinv" = {
+    
+    y.hat <- X %*% solve(t(X) %*% X) %*% t(X) %*% y
 
-<!--   het.param = vector("numeric", length = n.sims), -->
+    },
+  
+  "lin.sys" = {
+    
+    y.hat <- c(X %*% solve(t(X) %*% X, t(X) %*% y))
+    
+    },
+  
+  check = check_for_equal_coefs
+  
+  )
 
-<!--   hom.param = vector("numeric", length = n.sims), -->
+mbm  ## lin.sys wins! (but cor close behind)
+```
 
-<!--   het.boot  = vector("numeric", length = n.sims), -->
+    ## Unit: microseconds
+    ##     expr    min      lq     mean  median      uq     max neval cld
+    ##       lm 1829.3 2579.15 3733.529 3594.00 4602.20  8173.3   100  b 
+    ##      cor  100.0  157.45  239.177  210.95  311.05   595.1   100 a  
+    ##      svd 4340.1 5523.75 7209.546 6841.20 8563.00 13385.0   100   c
+    ##     pinv 4089.3 5370.70 7728.104 6908.80 8419.40 66949.0   100   c
+    ##  lin.sys   56.3   99.20  144.618  140.50  167.00   397.3   100 a
 
-<!--   hom.boot  = vector("numeric", length = n.sims) -->
+``` r
+autoplot(mbm)
+```
 
-<!-- ) -->
+    ## Coordinate system already present. Adding new coordinate system, which will replace the existing one.
 
-<!-- for (ii in seq_len(n.sims)) { -->
+<img src="bootstrapped-confints-for-2d-scatterplot_files/figure-gfm/unnamed-chunk-7-1.png" style="display: block; margin: auto;" />
 
-<!--   het <- rnorm(n, sd = x) ## generate variable that is heteroskedastic and uncorrelated with x -->
+Small differences between the correlation method and letting R
+`solve()`.
 
-<!--   hom <- rnorm(n, sd = mean(x))  ## generate variable z which is homoskedastic and uncorrelated with x -->
+``` r
+## test within sapply() loop ----
 
-<!--   p[ii, c("het.param", "hom.param")] <- c(cor.test(x, het)$p.value, cor.test(x, hom)$p.value) -->
+## first validate:
 
-<!--   p[ii, c("het.boot", "hom.boot")] <- c(boot.bivar(x, het)["p"], boot.bivar(x, hom)["p"]) -->
+x <- rnorm(100)
+y <- rnorm(100)
+data <- data.frame(x = x, y = y)
+grid <- data.frame(x = data$x)
+set.seed(0)
+p1 <- sapply(
+  seq_len(10),
+  function(.) {
+    s <- sample.int(length(grid$x), replace = TRUE)
+    b1 <- cor(x[s], y[s]) * sd(y[s]) / sd(x[s])
+    b0 <- mean(y[s]) - b1 * mean(x[s])
+    b1 * x + b0
+  }
+)
+X <- cbind(rep(1, length(x)), x)
+set.seed(0)
+p2 <- sapply(
+  seq_len(10),
+  function(.) {
+    samp <- sample.int(length(grid$x), replace = TRUE)
+    Xsamp <- X[samp, ]
+    X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])
+  }
+)
+all.equal(c(p2), c(p1))
+```
 
-<!-- } -->
+    ## [1] TRUE
 
-<!-- ``` -->
+``` r
+## now test:
 
-<!-- A look at one draw from the simulation: -->
+mbm <- microbenchmark(
+  
+  "cor" = {
+    
+    sapply(
+      seq_len(1000),
+      function(.) {
+        s <- sample.int(length(grid$x), replace = TRUE)
+        b1 <- cor(x[s], y[s]) * sd(y[s]) / sd(x[s])
+        b0 <- mean(y[s]) - b1 * mean(x[s])
+        b1 * x + b0
+      }
+    )
+    
+  },
+  
+  "lin.sys" = {
+    
+    sapply(
+      seq_len(1000),
+      function(.) {
+        samp <- sample.int(length(grid$x), replace = TRUE)
+        Xsamp <- X[samp, ]
+        X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])
+      }
+    )
+    
+    }
+)
+```
 
-<!-- ```{r simulation-one-draw, fig.width = 6} -->
-
-<!-- par(mfrow = c(1, 2), mar = c(2, 2, 2, 2)) -->
-
-<!-- plot(x, het, main = "x ~ het") -->
-
-<!-- plot(x, hom, main = "x ~ hom") -->
-
-<!-- cor(x, het) -->
-
-<!-- cor(x, hom) -->
-
-<!-- ``` -->
-
-<!-- Because there is no true correlation between `x` and either `het` or `hom`, the false positive rate should be ~ 5%, if alpha is 0.05. -->
-
-<!-- We see that heteroskedasticity inflates the parametric p-value, but not the bootstrapped: -->
-
-<!-- ```{r simulation-results, fig.width = 6, fig.height = 4} -->
-
-<!-- colMeans(apply(p, 2, function(x) x < 0.05)) * 100  ## false positive rate for each statistic -->
-
-<!-- par(mfrow = c(2, 2), mar = c(2, 2, 2, 2)) -->
-
-<!-- hist(p$het.param, main = "heteroskedastic, parametric") -->
-
-<!-- hist(p$hom.param, main = "homoskedastic, parametric") -->
-
-<!-- hist(p$het.boot, main = "heteroskedastic, bootstrapped") -->
-
-<!-- hist(p$hom.boot, main = "homoskedastic, bootstrapped") -->
-
-<!-- plot(density(p$het.param, from = 0, to = 1), lwd = 2, "p-value distribution") -->
-
-<!-- lines(density(p$hom.param, from = 0, to = 1), lwd = 2, lty = 2) -->
-
-<!-- lines(density(p$het.boot, from = 0, to = 1), lwd = 2, col = "firebrick") -->
-
-<!-- lines(density(p$hom.boot, from = 0, to = 1), lwd = 2, lty = 2, col = "firebrick") -->
-
-<!-- abline(h = 0, v = 0.05, col = "grey50") -->
-
-<!-- alph <- 0.05 -->
-
-<!-- binom.test(sum(p$het.param < alph), n = n.sims, alternative = "greater", p = alph) -->
-
-<!-- binom.test(sum(p$hom.param < alph), n = n.sims, alternative = "greater", p = alph) -->
-
-<!-- binom.test(sum(p$het.boot < alph), n = n.sims, alternative = "greater", p = alph) -->
-
-<!-- binom.test(sum(p$hom.boot < alph), n = n.sims, alternative = "greater", p = alph) -->
-
-<!-- ``` -->
-
-<!-- Another thing becomes apparent, as well, which is that the bootstrapped p-value might generally be a little optimistic. -->
-
-<!-- Even for the `x ~ hom` correlation, the false-positive rates are **slightly** higher in bootstrap versus parametric. -->
-
-<!-- I'm not sure whether this is a general property of bootstrap, or due to the specifics of my simulation here. -->
-
-<!-- But I'll keep it in mind. -->
-
-<!-- The important thing, though, is that it's clear that bootstrapping a CI is an effective way of side-stepping heteroskedasticity issues. -->
+## Final function.
