@@ -215,29 +215,33 @@ I realized that it could be easily optimized. In particular, the `lm()`
 function is [slow](https://rpubs.com/maechler/fast_lm) and provides many
 unneccesary things — when in fact all we need to compute is
 \(\mathbf{\hat y}\). And while there are faster `lm` alternatives, both
-in
-[base](https://www.rdocumentation.org/packages/stats/versions/3.6.1/topics/lm.fit)
-\[`lm.fit()`\], and in
-[`RccpEigen`](https://www.rdocumentation.org/packages/RcppEigen/versions/0.3.3.5.0)
-\[`fastLm()`\], even these light-weight functions are doing much more
-lifting than required.
+[in
+base](https://www.rdocumentation.org/packages/stats/versions/3.6.1/topics/lm.fit),
+and [in
+`RccpEigen`](https://www.rdocumentation.org/packages/RcppEigen/versions/0.3.3.5.0),
+even these light-weight functions are doing much more lifting than
+required.
 
 The general problem is simple least squares:
-\[\mathbf{\hat y} = \mathbf{x}b_1 + b_0\], that is, where \(\mathbf{x}\)
+\[\mathbf{\hat y} = \mathbf{x}b_1 + b_0\] that is, where \(\mathbf{x}\)
 is a column vector and the \(b\)s are scalars. In particular, estimates
 of the variability in \(\mathbf{\hat y}\)s across the range of
-\(\mathbf{x}\) is desired. This is accomplished by (1) resampling rows
-of \(\mathbf{x}\) and \(\mathbf{y}\) \(P\) times, forming sets of
-resampled vectors \(\mathbf{x}^*(p)\) and \(\mathbf{y}^*(p)\) where
-\(p = 1, 2, ..., P\), (2) estimating \(b^*_0(p)\) for each set, (3) and
-applying each of these resampled estimates to the original
-\(\mathbf{x}\) values:
-\[\mathbf{\hat y}^*(i) = \mathbf{x}b_1^*(i) + b_0^*(i)\]. Estimating
-\(b^*\)s can be done in a number of ways.
+\(\mathbf{x}\) is desired. A bootstrapped distribution of
+\(\mathbf{\hat y}\)s, written as the asterisked \(\mathbf{\hat y}^*\),
+is obtained by (1) resampling rows of \(\mathbf{x}\) and \(\mathbf{y}\)
+\(N\) times, forming sets of \(N\) resampled vectors \(\mathbf{x}^*\)
+and \(\mathbf{y}^*\), (2) estimating corresponding \(b^*_0\) and
+\(b^*_1\), (3) then applying each of these bootstrapped coefficients to
+the original \(\mathbf{x}\):
+\[\mathbf{\hat y}^* = \mathbf{x}b_1^* + b_0^*\]
+
+Estimating \(b^*\)s can be done in a number of algebraically equivalent
+ways. But, these ways are likely not eqivalent in terms of computational
+efficiency.
 
 One method is terms of linear correlation and standard deviation:
 \[b_1^* = \text{cor}(\mathbf{x}^*, \mathbf{y}^*) \tfrac{\text{sd}(\mathbf{y}^*)} {\text{sd}(\mathbf{x}^*)}\]
-\[b_0^* = \bar y^* - \bar x^* b_1^*\], where the bar indicates the mean.
+\[b_0^* = \bar y^* - \bar x^* b_1^*\] where the bar indicates the mean.
 This formulation is as simple as it gets.
 
 Another is in terms of linear algebra
@@ -326,12 +330,12 @@ mbm  ## lin.sys wins! (but cor close behind)
 ```
 
     ## Unit: microseconds
-    ##     expr    min      lq     mean  median      uq     max neval cld
-    ##       lm 1844.2 3738.95 4896.331 4369.55 5152.00 25410.2   100  b 
-    ##      cor  123.1  221.25  294.845  269.55  342.55   648.8   100 a  
-    ##      svd 4212.4 6187.60 8394.512 7910.10 9752.80 20727.0   100   c
-    ##     pinv 4263.9 7275.20 8383.020 8191.10 9563.60 20358.5   100   c
-    ##  lin.sys   51.9  114.50  224.696  156.90  196.65  4640.7   100 a
+    ##     expr    min      lq      mean   median       uq     max neval cld
+    ##       lm 2746.7 4488.70  6517.060  5141.60  8869.20 15886.2   100  b 
+    ##      cor  111.1  241.30   414.801   335.25   418.65  3647.5   100 a  
+    ##      svd 6390.0 8555.95 11666.334 10469.40 13151.95 80471.0   100   c
+    ##     pinv 6256.6 8613.10 11466.749 10856.55 13742.85 24125.3   100   c
+    ##  lin.sys  102.8  152.75   262.109   190.15   257.50  2495.0   100 a
 
 ``` r
 autoplot(mbm)
@@ -351,38 +355,12 @@ loops and running the microbenchmark on these loops.
 ``` r
 ## test within sapply() loop ----
 
-## first validate:
-
 x <- rnorm(100)
 y <- rnorm(100)
 data <- data.frame(x = x, y = y)
 grid <- data.frame(x = data$x)
-set.seed(0)
-p1 <- sapply(
-  seq_len(10),
-  function(.) {
-    s <- sample.int(length(grid$x), replace = TRUE)
-    b1 <- cor(x[s], y[s]) * sd(y[s]) / sd(x[s])
-    b0 <- mean(y[s]) - b1 * mean(x[s])
-    b1 * x + b0
-  }
-)
-X <- cbind(rep(1, length(x)), x)
-set.seed(0)
-p2 <- sapply(
-  seq_len(10),
-  function(.) {
-    samp <- sample.int(length(grid$x), replace = TRUE)
-    Xsamp <- X[samp, ]
-    X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])
-  }
-)
-all.equal(c(p2), c(p1))
-```
 
-    ## [1] TRUE
 
-``` r
 ## now test:
 
 mbm <- microbenchmark(
@@ -414,8 +392,63 @@ mbm <- microbenchmark(
     
     }
 )
+
+mbm
 ```
 
+    ## Unit: milliseconds
+    ##     expr      min       lq     mean   median       uq      max neval cld
+    ##      cor 213.6561 228.6312 273.1775 248.1402 310.4256 477.8796   100   b
+    ##  lin.sys 105.4995 129.3700 180.7424 141.0149 214.4464 430.6556   100  a
+
+``` r
+autoplot(mbm)
+```
+
+    ## Coordinate system already present. Adding new coordinate system, which will replace the existing one.
+
+<img src="bootstrapped-confints-for-2d-scatterplot_files/figure-gfm/unnamed-chunk-8-1.png" style="display: block; margin: auto;" />
 `solve()` it is.
 
 ## the final function
+
+``` r
+BootCI <- ggplot2::ggproto(
+  "BootCI", ggplot2::Stat, 
+  required_aes = c("x", "y"),
+  compute_group = function(data, scales, params, n = 1000, percent = 95) {
+    
+    grid <- data.frame(x = data$x)
+    X <- cbind(rep(1, length(x)), x)  ## design matrix (includes intercept)
+    
+    predictions <- sapply(
+      seq_len(n),
+      function(.) {
+        samp <- sample.int(length(grid$x), replace = TRUE)
+        Xsamp <- X[samp, ]
+        X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])  ## get bs then dot with X
+      }
+    )
+    
+    .alpha <- (100 - percent) / 200  ## 2 tailed
+    grid$ymax <- apply(predictions, 1, quantile, 1 - .alpha)
+    grid$ymin <- apply(predictions, 1, quantile, .alpha)
+    
+    grid
+    
+  }
+)
+
+stat_boot_ci <- function(mapping = NULL, data = NULL, geom = "ribbon",
+                         position = "identity", na.rm = FALSE, show.legend = NA, 
+                         inherit.aes = TRUE, n = 1000, percent = 95, ...) {
+  ## see: https://cran.r-project.org/web/packages/ggplot2/vignettes/extending-ggplot2.html
+  
+  ggplot2::layer(
+    stat = BootCI, data = data, mapping = mapping, geom = geom, 
+    position = position, show.legend = show.legend, inherit.aes = inherit.aes,
+    params = list(n = n, percent = percent, na.rm = na.rm, ...)
+  )
+  
+}
+```
