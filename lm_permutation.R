@@ -1,6 +1,6 @@
 ## permuted p values for linear model ---
 
-lm.permute <- function(df, yname, nresamples = 1E4, add.intercept = TRUE) {
+lm.permute <- function(df, yname, nresamples = 1E4, add.intercept = TRUE, alternative = "two.sided") {
   ## NB: NOT CONFIGURED FOR USE WHEN is.factor(df$column).
   ## categorical IVs can still be used, but the levels just need to be specified as separate integer columns
   ## (e.g., dummy variables).
@@ -19,7 +19,12 @@ lm.permute <- function(df, yname, nresamples = 1E4, add.intercept = TRUE) {
   ## get permuted estimates ---- 
   
   ## convert to matrices (for speed)
-  X <- cbind(int = 1, as.matrix(df[xnames]))
+  if (add.intercept) {
+    X <- cbind(int = 1, as.matrix(df[xnames]))
+  } else {
+    X <- cbind(as.matrix(df[xnames]))
+  }
+  
   y <- as.matrix(df[yname])
   B <- matrix(NA, nrow = ncol(X), ncol = nresamples)  ## to hold all resamples
   
@@ -33,11 +38,18 @@ lm.permute <- function(df, yname, nresamples = 1E4, add.intercept = TRUE) {
   
   ## calculate p values ---- 
   
-  ## proportion of permuted betas with more extreme estimates:
-  ## (a 2-tailed p-value):
-  observed$p.permuted <- rowSums(abs(B) >= abs(observed$b)) / nresamples
-  
-  
+  ## proportion of permuted betas with...
+  if (alternative == "two.sided") {
+    ## ...more extreme estimates:
+    observed$p.permuted <- rowSums(abs(B) >= abs(observed$b)) / nresamples
+  } else if (alternative == "less") {
+    ## ...smaller estimates:
+    observed$p.permuted <- rowSums(B < observed$b) / nresamples
+  } else if (alternative == "greater") {
+    ## ...larger estimates:
+    observed$p.permuted <- rowSums(B > observed$b) / nresamples
+  }
+
   observed
   
 }

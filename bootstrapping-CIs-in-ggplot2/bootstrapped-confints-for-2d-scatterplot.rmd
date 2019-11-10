@@ -1,6 +1,6 @@
 ---
 title: "flexibly plotting bootstrapped CIs on scatterplots with ggplot2"
-output: github_document
+output: html_document
 ---
 
 
@@ -13,7 +13,7 @@ Today I found a solution to a ggplotting problem that I've hit my head on enough
 ## the problem
 
 As it typically goes, I'll have two measures, **x** and **y**, and I'd like to assess their correlation.
-But these measures don't seem to be 'well-behaved'.
+But these measures aren't well-behaved.
 For example, they might look heteroskedastic:
 
 ```{r, x-and-y}
@@ -33,10 +33,11 @@ p <- ggplot(data.frame(x, y), aes(x, y)) +
 p
 ```
 
-Being aware of the issues that have been raised regarding correlations and parametric stats (e.g., Wilcox & Rousselet, 2018; 10.1002/cpns.41), I'll be wary of trusting the p-values from parametric tests.
+Issues have been raised regarding parametric estimates of bivariate correlations, especially under heteroskedasticity (e.g., Wilcox & Rousselet, 2018; 10.1002/cpns.41).
+So, I'd be generally wary of trusting parametric p-values in this case.
 For example, the statistic I'd get from `cor.test(x, y)$p.value` is probably off the mark.
 
-So I use an appropriate test, one that's robust to heteroskedasticity: percentile bootstrap of a confidence interval (CI) around the correlation statistic (see, e.g., Wilcox, Rousselet, & Pernet, 2018, 10.1080/00949655.2018.1501051).
+So I use an appropriate test, one that's robust to heteroskedasticity: percentile bootstrap of a confidence interval (CI) around the correlation statistic (Wilcox et al., 2018).
 For convenience, I wrap this test within the following function, `boot.bivar()`.
 This function takes two vectors of the same length and spits out a bootstrapped p-value and 95% confidence interval of the linear correlation coefficient.
 
@@ -78,16 +79,14 @@ Thinking within the ggplot universe, I first turned to `geom_smooth()`:
 p + geom_smooth(method = "lm")
 ```
 
-**BUT.**
-After thinking for a moment, and looking into `?geom_smooth`, I realize that `geom_smooth(method = "lm")` uses a parametric estimate of the CI.
-It assumes things that aren't true of the data.
-
+But after thinking for a moment, and looking into `?geom_smooth`, I realize that `geom_smooth(method = "lm")` uses a parametric estimate of the CI.
 And although I have an appropriately calculated CI already in hand (from `boot.bivar()`), I also realize that `geom_smooth()` won't take as input a 'user-defined' CI.
+
 So, my question has been: **how do I add a custom CI layer (e.g., from a bootstrapped CI) to a scatterplot in ggplot2?**
 
 ## a solution
 
-Essentially the solution that I found was to use `predict.lm()` (and `sapply()`) to generate a bootstrapped CI around each predicted value, $\mathbf{\hat{y}} \sim \mathbf{x}\beta$, then to feed these values into `geom_ribbon()`, which draws the thing.
+Essentially the solution that I found was to use `predict.lm()` (and `sapply()`) to generate a bootstrapped CI around each predicted value, $\mathbf{\hat{y}} = \mathbf{xb}$, then to feed these values into `geom_ribbon()`, which draws the thing.
 And to make this extensible, I wrapped this bootstrapping part within a function `boot.bivar.predict()`, which is similar to the one above.
 
 ```{r}
@@ -127,7 +126,7 @@ p + geom_ribbon(aes(ymin = xy.ci$lb, ymax = xy.ci$ub), alpha = 0.3)  ## add to p
 
 ## a more useful solution
 
-**But, for a more useful solution, I added an additional step of embedding these two functions---bootstrapping and drawing via `geom_ribbon()`---within a ggplot2-style function, `stat_boot_ci()`.**
+But, for a more useful solution, I added an additional step of embedding these two functions---bootstrapping and drawing via `geom_ribbon()`---within a ggplot2-style function, `stat_boot_ci()`.
 This additional step enables me to call `stat_boot_ci()` as if it were an out-of-the-box ggplot function, within a ggplot pipe: it inherits (e.g., I don't have to explicitly feed it `data`, `x`, or `y` args), and it takes arguments that `geom_ribbon()` would take (e.g., `alpha`).
 
 To do this, I created `ggproto()` and `layer()` objects, embedded my bootstrapping function within, and set appropriate defaults.
@@ -175,7 +174,7 @@ stat_boot_ci <- function(mapping = NULL, data = NULL, geom = "ribbon",
 
 I cribbed some of this from [here](https://cran.r-project.org/web/packages/ggplot2/vignettes/extending-ggplot2.html), which gives an illuminating walk-through of the guts of ggplot2.
 
-To see our `stat_boot_ci()` function in its glory, I use it below, on our highly heteroskedastic data.
+To see `stat_boot_ci()` in its glory, I use it below, on these highly heteroskedastic data.
 I compare the bootstrapped CI to a parametric one from `geom_smooth()`.
 The `geom_smooth()` is displayed underneath, in red.
 
@@ -213,17 +212,16 @@ where the bar indicates the mean.
 This formulation is as simple as it gets.
 
 Another is in terms of linear algebra
-<!-- \[\mathbf{b}^* = (\mathbf{X}^{*\text{T}}\mathbf{X}^*)^{-1}\mathbf{X}^{*\text{T}}\mathbf{y}^*\] -->
 \[\mathbf{b}^* =  \mathbf{X}^{*\dagger} \mathbf{y}^*\]
-where $\mathbf{b}^*$ is now a 2-dimensional column vector, $\mathbf{X}^*$ is a matrix with a column $\mathbf{x}^*$ and a column of all-ones, and $\dagger$ indicates the pseudo-inverse.
+where $\mathbf{b}^*$ is now a 2-dimensional column vector, $\mathbf{X}^*$ is a matrix with a column $\mathbf{x}^*$ and a column of ones, and $\dagger$ indicates the pseudo-inverse.
 This approach would use matrix packages, and while these packages are generally fast, it feels a little like cutting a steak with a sword.
 However, this approach could easily accommodate multiple regressors, should I desire to extend my plotting function to mulitple regression in the future. 
 Also, the pseudoinverse does not need to be explicitly calculated; the above formulation is just one method of many.
-For example, R can solve this system of linear equations via, well, `solve()`, or singular value decomposition can be used, as well.
+For example, R can solve this system of linear equations via, well, `solve()`, or via singular value decomposition.
 
 I'm unsure which method might be the most efficient.
 
-So, I use the microbenchmark package to compare the speed of these methods below, with code cribbed from [this page](https://www.alexejgossmann.com/benchmarking_r/).
+So, I use the microbenchmark package to compare the speed of these methods below, with code cribbed from [this page](https://www.alexejgossmann.com/benchmarking_r/), although I added a couple extra methods just to see how they perform.
 This test also includes a check to make sure the methods yield equivalent $\mathbf{\hat y}$s.
 
 ```{r}
@@ -359,7 +357,7 @@ BootCI <- ggplot2::ggproto(
       function(.) {
         samp <- sample.int(length(grid$x), replace = TRUE)
         Xsamp <- X[samp, ]
-        X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])  ## get bs then dot with X
+        X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])  ## solve for b then apply to X
       }
     )
     

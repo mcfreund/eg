@@ -8,8 +8,8 @@ write something up and share with whomever might see.
 ## the problem
 
 As it typically goes, I’ll have two measures, **x** and **y**, and I’d
-like to assess their correlation. But these measures don’t seem to be
-‘well-behaved’. For example, they might look heteroskedastic:
+like to assess their correlation. But these measures aren’t
+well-behaved. For example, they might look heteroskedastic:
 
 ``` r
 library(ggplot2)
@@ -30,19 +30,19 @@ p
 
 <img src="bootstrapped-confints-for-2d-scatterplot_files/figure-gfm/x-and-y-1.png" style="display: block; margin: auto;" />
 
-Being aware of the issues that have been raised regarding correlations
-and parametric stats (e.g., Wilcox & Rousselet, 2018; 10.1002/cpns.41),
-I’ll be wary of trusting the p-values from parametric tests. For
-example, the statistic I’d get from `cor.test(x, y)$p.value` is probably
-off the mark.
+Issues have been raised regarding parametric estimates of bivariate
+correlations, especially under heteroskedasticity (e.g., Wilcox &
+Rousselet, 2018; 10.1002/cpns.41). So, I’d be generally wary of trusting
+parametric p-values in this case. For example, the statistic I’d get
+from `cor.test(x, y)$p.value` is probably off the mark.
 
 So I use an appropriate test, one that’s robust to heteroskedasticity:
 percentile bootstrap of a confidence interval (CI) around the
-correlation statistic (see, e.g., Wilcox, Rousselet, & Pernet, 2018,
-10.1080/00949655.2018.1501051). For convenience, I wrap this test within
-the following function, `boot.bivar()`. This function takes two vectors
-of the same length and spits out a bootstrapped p-value and 95%
-confidence interval of the linear correlation coefficient.
+correlation statistic (Wilcox et al., 2018). For convenience, I wrap
+this test within the following function, `boot.bivar()`. This function
+takes two vectors of the same length and spits out a bootstrapped
+p-value and 95% confidence interval of the linear correlation
+coefficient.
 
 ``` r
 boot.bivar <- function(x, y, n.resamples = 1000) {
@@ -86,22 +86,22 @@ p + geom_smooth(method = "lm")
 
 <img src="bootstrapped-confints-for-2d-scatterplot_files/figure-gfm/unnamed-chunk-2-1.png" style="display: block; margin: auto;" />
 
-**BUT.** After thinking for a moment, and looking into `?geom_smooth`, I
+But after thinking for a moment, and looking into `?geom_smooth`, I
 realize that `geom_smooth(method = "lm")` uses a parametric estimate of
-the CI. It assumes things that aren’t true of the data.
+the CI. And although I have an appropriately calculated CI already in
+hand (from `boot.bivar()`), I also realize that `geom_smooth()` won’t
+take as input a ‘user-defined’ CI.
 
-And although I have an appropriately calculated CI already in hand (from
-`boot.bivar()`), I also realize that `geom_smooth()` won’t take as input
-a ‘user-defined’ CI. So, my question has been: **how do I add a custom
-CI layer (e.g., from a bootstrapped CI) to a scatterplot in ggplot2?**
+So, my question has been: **how do I add a custom CI layer (e.g., from a
+bootstrapped CI) to a scatterplot in ggplot2?**
 
 ## a solution
 
 Essentially the solution that I found was to use `predict.lm()` (and
 `sapply()`) to generate a bootstrapped CI around each predicted value,
-\(\mathbf{\hat{y}} \sim \mathbf{x}\beta\), then to feed these values
-into `geom_ribbon()`, which draws the thing. And to make this
-extensible, I wrapped this bootstrapping part within a function
+\(\mathbf{\hat{y}} = \mathbf{xb}\), then to feed these values into
+`geom_ribbon()`, which draws the thing. And to make this extensible, I
+wrapped this bootstrapping part within a function
 `boot.bivar.predict()`, which is similar to the one above.
 
 ``` r
@@ -139,13 +139,13 @@ p + geom_ribbon(aes(ymin = xy.ci$lb, ymax = xy.ci$ub), alpha = 0.3)  ## add to p
 
 ## a more useful solution
 
-**But, for a more useful solution, I added an additional step of
-embedding these two functions—bootstrapping and drawing via
-`geom_ribbon()`—within a ggplot2-style function, `stat_boot_ci()`.**
-This additional step enables me to call `stat_boot_ci()` as if it were
-an out-of-the-box ggplot function, within a ggplot pipe: it inherits
-(e.g., I don’t have to explicitly feed it `data`, `x`, or `y` args), and
-it takes arguments that `geom_ribbon()` would take (e.g., `alpha`).
+But, for a more useful solution, I added an additional step of embedding
+these two functions—bootstrapping and drawing via `geom_ribbon()`—within
+a ggplot2-style function, `stat_boot_ci()`. This additional step enables
+me to call `stat_boot_ci()` as if it were an out-of-the-box ggplot
+function, within a ggplot pipe: it inherits (e.g., I don’t have to
+explicitly feed it `data`, `x`, or `y` args), and it takes arguments
+that `geom_ribbon()` would take (e.g., `alpha`).
 
 To do this, I created `ggproto()` and `layer()` objects, embedded my
 bootstrapping function within, and set appropriate defaults.
@@ -193,10 +193,10 @@ I cribbed some of this from
 [here](https://cran.r-project.org/web/packages/ggplot2/vignettes/extending-ggplot2.html),
 which gives an illuminating walk-through of the guts of ggplot2.
 
-To see our `stat_boot_ci()` function in its glory, I use it below, on
-our highly heteroskedastic data. I compare the bootstrapped CI to a
-parametric one from `geom_smooth()`. The `geom_smooth()` is displayed
-underneath, in red.
+To see `stat_boot_ci()` in its glory, I use it below, on these highly
+heteroskedastic data. I compare the bootstrapped CI to a parametric one
+from `geom_smooth()`. The `geom_smooth()` is displayed underneath, in
+red.
 
 ``` r
 p +
@@ -245,10 +245,9 @@ One method is terms of linear correlation and standard deviation:
 This formulation is as simple as it gets.
 
 Another is in terms of linear algebra
-<!-- \[\mathbf{b}^* = (\mathbf{X}^{*\text{T}}\mathbf{X}^*)^{-1}\mathbf{X}^{*\text{T}}\mathbf{y}^*\] -->
 \[\mathbf{b}^* =  \mathbf{X}^{*\dagger} \mathbf{y}^*\] where
 \(\mathbf{b}^*\) is now a 2-dimensional column vector, \(\mathbf{X}^*\)
-is a matrix with a column \(\mathbf{x}^*\) and a column of all-ones, and
+is a matrix with a column \(\mathbf{x}^*\) and a column of ones, and
 \(\dagger\) indicates the pseudo-inverse. This approach would use matrix
 packages, and while these packages are generally fast, it feels a little
 like cutting a steak with a sword. However, this approach could easily
@@ -256,14 +255,14 @@ accommodate multiple regressors, should I desire to extend my plotting
 function to mulitple regression in the future. Also, the pseudoinverse
 does not need to be explicitly calculated; the above formulation is just
 one method of many. For example, R can solve this system of linear
-equations via, well, `solve()`, or singular value decomposition can be
-used, as well.
+equations via, well, `solve()`, or via singular value decomposition.
 
 I’m unsure which method might be the most efficient.
 
 So, I use the microbenchmark package to compare the speed of these
 methods below, with code cribbed from [this
-page](https://www.alexejgossmann.com/benchmarking_r/). This test also
+page](https://www.alexejgossmann.com/benchmarking_r/), although I added
+a couple extra methods just to see how they perform. This test also
 includes a check to make sure the methods yield equivalent
 \(\mathbf{\hat y}\)s.
 
@@ -330,12 +329,12 @@ mbm  ## lin.sys wins! (but cor close behind)
 ```
 
     ## Unit: microseconds
-    ##     expr    min      lq      mean   median       uq     max neval cld
-    ##       lm 2746.7 4488.70  6517.060  5141.60  8869.20 15886.2   100  b 
-    ##      cor  111.1  241.30   414.801   335.25   418.65  3647.5   100 a  
-    ##      svd 6390.0 8555.95 11666.334 10469.40 13151.95 80471.0   100   c
-    ##     pinv 6256.6 8613.10 11466.749 10856.55 13742.85 24125.3   100   c
-    ##  lin.sys  102.8  152.75   262.109   190.15   257.50  2495.0   100 a
+    ##     expr    min      lq     mean  median      uq    max neval cld
+    ##       lm 1387.9 1619.25 1823.118 1769.90 1898.75 2821.7   100  b 
+    ##      cor   74.7   95.90  131.665  119.65  160.20  314.5   100 a  
+    ##      svd 3421.7 3674.20 4198.576 3875.90 4874.70 5752.8   100   c
+    ##     pinv 3002.0 3628.10 4196.107 3853.55 4871.85 6122.5   100   c
+    ##  lin.sys   39.6   58.15   78.121   72.05   89.55  155.7   100 a
 
 ``` r
 autoplot(mbm)
@@ -397,9 +396,9 @@ mbm
 ```
 
     ## Unit: milliseconds
-    ##     expr      min       lq     mean   median       uq      max neval cld
-    ##      cor 213.6561 228.6312 273.1775 248.1402 310.4256 477.8796   100   b
-    ##  lin.sys 105.4995 129.3700 180.7424 141.0149 214.4464 430.6556   100  a
+    ##     expr     min       lq      mean   median       uq      max neval cld
+    ##      cor 79.1462 87.98425 107.99138 93.61055 104.5162 309.1886   100   b
+    ##  lin.sys 46.1760 51.97880  82.02451 57.00240 137.7046 191.2126   100  a
 
 ``` r
 autoplot(mbm)
@@ -426,7 +425,7 @@ BootCI <- ggplot2::ggproto(
       function(.) {
         samp <- sample.int(length(grid$x), replace = TRUE)
         Xsamp <- X[samp, ]
-        X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])  ## get bs then dot with X
+        X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])  ## solve for b then apply to X
       }
     )
     
