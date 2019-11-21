@@ -411,43 +411,225 @@ autoplot(mbm)
 
 ## the final function
 
+Note I swapped out `sapply()` for `vapply()`. They are similar
+functions, but vapply is considered “safer” as it will return an error
+in case of an unexpected output value.
+
 ``` r
 BootCI <- ggplot2::ggproto(
-  "BootCI", ggplot2::Stat, 
+  "BootCI", ggplot2::Stat,
   required_aes = c("x", "y"),
+
   compute_group = function(data, scales, params, n = 1000, percent = 95) {
-    
-    grid <- data.frame(x = data$x)
-    X <- cbind(rep(1, length(x)), x)  ## design matrix (includes intercept)
-    
-    predictions <- sapply(
+
+    X <- cbind(rep(1, length(data$x)), data$x)  ## design matrix (includes intercept)
+    y <- data$y
+
+    predictions <- vapply(
       seq_len(n),
       function(.) {
-        samp <- sample.int(length(grid$x), replace = TRUE)
+        samp <- sample.int(nrow(X), replace = TRUE)
         Xsamp <- X[samp, ]
-        X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])  ## solve for b then apply to X
-      }
+        X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% y[samp])  ## get bs then dot with X
+      },
+      FUN.VALUE = numeric(nrow(X))
     )
-    
+
     .alpha <- (100 - percent) / 200  ## 2 tailed
-    grid$ymax <- apply(predictions, 1, quantile, 1 - .alpha)
-    grid$ymin <- apply(predictions, 1, quantile, .alpha)
-    
+    grid <- data.frame(
+        x    = data$x,
+        ymax = apply(predictions, 1, quantile, 1 - .alpha),
+        ymin = apply(predictions, 1, quantile, .alpha)
+      )
+
     grid
-    
+
   }
+
 )
 
-stat_boot_ci <- function(mapping = NULL, data = NULL, geom = "ribbon",
-                         position = "identity", na.rm = FALSE, show.legend = NA, 
-                         inherit.aes = TRUE, n = 1000, percent = 95, ...) {
-  ## see: https://cran.r-project.org/web/packages/ggplot2/vignettes/extending-ggplot2.html
-  
+stat_boot_ci <- function(
+  mapping = NULL, data = NULL, geom = "ribbon",
+  position = "identity", na.rm = FALSE, show.legend = NA,
+  inherit.aes = TRUE, n = 1000, percent = 95, ...) {
+
   ggplot2::layer(
-    stat = BootCI, data = data, mapping = mapping, geom = geom, 
+    stat = BootCI, data = data, mapping = mapping, geom = geom,
     position = position, show.legend = show.legend, inherit.aes = inherit.aes,
     params = list(n = n, percent = percent, na.rm = na.rm, ...)
   )
-  
+
 }
 ```
+
+<!-- ## update: improved CI estimates -->
+
+<!-- ```{r} -->
+
+<!-- x <- rnorm(100) -->
+
+<!-- y <- rnorm(100) -->
+
+<!-- D <- cbind(x0 = rep(1, length(x)), x1 = x, y)  ## add intercept -->
+
+<!-- predictions <- boot::boot( -->
+
+<!--   D, -->
+
+<!--   statistic = function(D, samp) { -->
+
+<!--     X     <- D[, 1:2] -->
+
+<!--     Xsamp <- X[samp, ] -->
+
+<!--     ysamp <- D[samp, 3] -->
+
+<!--     X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% ysamp) -->
+
+<!--   }, -->
+
+<!--   R = 1000 -->
+
+<!-- ) -->
+
+<!-- apply(predictions$t, 2, quantile, 5 / 200) -->
+
+<!-- apply(predictions$t, 2, quantile, 95 / 200) -->
+
+<!-- ## TODO: -->
+
+<!-- ##  - add if bca logic -->
+
+<!-- mbm <- microbenchmark::microbenchmark( -->
+
+<!--   "quantile" = { -->
+
+<!--     cbind( -->
+
+<!--       apply(results$t, 2, quantile, 5 / 200), -->
+
+<!--       apply(results$t, 2, quantile, 95 / 200) -->
+
+<!--     ) -->
+
+<!--   }, -->
+
+<!--   "lin.sys" = { -->
+
+<!--     predictions <- matrix(NA, nrow = nrow(X), ncol = 2) -->
+
+<!--     for (ii in seq_len(nrow(D))) { -->
+
+<!--       # predictions[ii, ] <- boot::boot.ci(results, conf = 0.95, type = "norm", index = ii)$bca[, 4:5] -->
+
+<!--       predictions[ii, ] <- boot::boot.ci(results, conf = 0.95, type = "perc", index = ii)$perc[, 4:5] -->
+
+<!--     } -->
+
+<!--   } -->
+
+<!-- ) -->
+
+<!-- mbm -->
+
+<!-- autoplot(mbm) -->
+
+<!-- predictions <- matrix(NA, nrow = nrow(X), ncol = 2) -->
+
+<!-- for (ii in seq_len(nrow(D))) { -->
+
+<!--   # predictions[ii, ] <- boot::boot.ci(results, conf = 0.95, type = "norm", index = ii)$bca[, 4:5] -->
+
+<!--   predictions[ii, ] <- boot::boot.ci(results, conf = 0.95, type = "perc", index = ii)$perc[, 4:5] -->
+
+<!-- } -->
+
+<!-- ## ---- -->
+
+<!-- BootCI <- ggplot2::ggproto( -->
+
+<!--   "BootCI", ggplot2::Stat,  -->
+
+<!--   required_aes = c("x", "y"), -->
+
+<!--   compute_group = function(data, scales, params, n = 1000, percent = 95, type = "perc") { -->
+
+<!--     grid <- data.frame(x = data$x) -->
+
+<!--     D <- cbind(rep(1, length(x)), x, y)  ## design matrix and response vector -->
+
+<!--     predictions <- boot::boot( -->
+
+<!--       D, -->
+
+<!--       statistic = function(D, samp) { -->
+
+<!--         X     <- D[, 1:2] -->
+
+<!--         Xsamp <- X[samp, ] -->
+
+<!--         ysamp <- D[samp, 3] -->
+
+<!--         X %*% solve(t(Xsamp) %*% Xsamp, t(Xsamp) %*% ysamp) -->
+
+<!--       }, -->
+
+<!--       R = 1000 -->
+
+<!--     ) -->
+
+<!--     .alpha <- (100 - percent) / 200  ## 2 tailed -->
+
+<!--     if (type == "perc") { -->
+
+<!--       grid$ymin <- apply(predictions$t, 2, quantile, 1 - .alpha) -->
+
+<!--       grid$ymax <- apply(predictions$t, 2, quantile, .alpha) -->
+
+<!--     } else if (type == "bca") { -->
+
+<!--       grid$ymin <- NA -->
+
+<!--       grid$ymax <- NA -->
+
+<!--       for (ii in seq_len(nrow(D))) { -->
+
+<!--         grid[ii, 2:3] <- boot::boot.ci(predictions, conf = percent / 100, type = "bca", index = ii)$bca[, 4:5] -->
+
+<!--       } -->
+
+<!--     } -->
+
+<!--     grid -->
+
+<!--   } -->
+
+<!-- ) -->
+
+<!-- stat_boot_ci <- function(mapping = NULL, data = NULL, geom = "ribbon", -->
+
+<!--                          position = "identity", na.rm = FALSE, show.legend = NA,  -->
+
+<!--                          inherit.aes = TRUE, n = 1000, percent = 95, type = "perc", ...) { -->
+
+<!--   ## see: https://cran.r-project.org/web/packages/ggplot2/vignettes/extending-ggplot2.html -->
+
+<!--   ggplot2::layer( -->
+
+<!--     stat = BootCI, data = data, mapping = mapping, geom = geom,  -->
+
+<!--     position = position, show.legend = show.legend, inherit.aes = inherit.aes, -->
+
+<!--     params = list(n = n, percent = percent, type = type, na.rm = na.rm, ...) -->
+
+<!--   ) -->
+
+<!-- } -->
+
+<!-- p + -->
+
+<!--   geom_smooth(method = "lm", se = TRUE, fill = "red", alpha = 0.3) + -->
+
+<!--   stat_boot_ci(alpha = 0.3, n = 1E4, percent = 95, type = "bca") -->
+
+<!-- ``` -->
